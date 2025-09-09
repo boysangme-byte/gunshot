@@ -3,42 +3,52 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>악령사냥 v11.4</title>
+<title>악령사냥 v11.5</title>
 <style>
-  :root { --bg:#0a0014; --line:#3a2360; --text:#e9d7ff; --accent:#d080ff; --good:#73ffdf; --pink:#ff76d2; }
+  :root { --bg:#0a0014; --line:#3a2360; --text:#e9d7ff; --accent:#d080ff; --good:#73ffdf; --pink:#ff76d2; --warn:#ffc16e; }
   *{ box-sizing:border-box }
-  body{ margin:0; min-height:100vh; display:grid; place-items:center; background:radial-gradient(950px 650px at 70% 20%,#1a0038,var(--bg)); color:var(--text); font-family:"Noto Sans KR",system-ui,sans-serif }
+  body{
+    margin:0; min-height:100vh; display:grid; place-items:center; color:var(--text);
+    background:
+      radial-gradient(1200px 800px at 65% 10%, #1b0038 0%, #0f0223 55%, #090015 100%);
+    font-family:"Noto Sans KR",system-ui,sans-serif
+  }
   .stage{ position:relative; width:100%; max-width:960px }
   #game{ width:100%; aspect-ratio:16/9; background:#000; border:2px solid var(--line); border-radius:12px; display:block; touch-action:none }
   .title{ font-weight:900; font-size:20px; margin:12px 0 8px; color:var(--accent); text-shadow:0 0 8px var(--accent) }
-  .hud{ display:flex; gap:12px; flex-wrap:wrap; font-size:14px }
-  .hud > div{ background:#ffffff12; border:1px solid var(--line); padding:6px 10px; border-radius:8px }
+  .hud{ display:flex; gap:12px; flex-wrap:wrap; align-items:center; font-size:14px }
+  .hud > div{ background:#ffffff12; border:1px solid var(--line); padding:6px 10px; border-radius:8px; display:flex; align-items:center; gap:8px }
   .overlay{ position:absolute; inset:0; display:none; align-items:center; justify-content:center }
   .panel{ background:#120626ee; border:1px solid var(--line); border-radius:16px; padding:22px; text-align:center; box-shadow:0 10px 30px #0008 }
   .btn{ background:#2a1658; color:#fff; border:1px solid #5b3db3; padding:10px 16px; border-radius:10px; cursor:pointer }
 
-  /* heat bar – a bit lower */
-  .heatbar { position:absolute; left:14px; right:14px; bottom:4px; height:8px; border-radius:6px; border:1px solid var(--line); background:#241542; display:none;}
-  .heatfill { height:100%; border-radius:6px; background:linear-gradient(90deg,#7be7ff,#d080ff,#ff76d2); width:0%; }
-  .heatlabel { position:absolute; bottom:18px; left:14px; font-size:12px; opacity:.8 }
-  .overblink { animation: blink 0.6s linear infinite; }
-  @keyframes blink { 50%{ opacity:.35 } }
+  /* mini vertical heat next to weapon */
+  .heatmini{ width:8px; height:28px; border:1px solid var(--line); border-radius:6px; background:#1f1139; position:relative; overflow:hidden }
+  .heatmini .fill{ position:absolute; left:0; right:0; bottom:0; height:0%; background:linear-gradient(#7be7ff,#d080ff,#ff76d2); border-radius:6px }
+  .heatmini.over::after{ content:""; position:absolute; inset:0; background:repeating-linear-gradient(45deg,#ff5a9a44 0 6px,#0000 6px 12px); }
 
   /* dash bar */
-  .dashbar { position:absolute; left:50%; transform:translateX(-50%); bottom:20px; width:240px; height:10px; border:1px solid #7b4dff; border-radius:8px; background:#1b0d39; }
-  .dashfill { height:100%; width:0%; background:linear-gradient(90deg,#a177ff,#e3b3ff); border-radius:8px; }
+  .dashbar { position:absolute; left:50%; transform:translateX(-50%); bottom:20px; width:260px; height:10px; border:1px solid #7b4dff; border-radius:8px; background:#1b0d39; }
+  .dashfill { height:100%; width:0%; background:linear-gradient(90deg,#a177ff,#e3b3ff); border-radius:8px; transition:width .1s linear }
   .dashlabel{ position:absolute; left:50%; transform:translateX(-50%); bottom:34px; font-size:12px; color:#d9c8ff; text-shadow:0 0 6px #8f6aff }
+  .dashready{ color:#9affc2; text-shadow:0 0 6px #2fff8f }
+
+  /* floating damage text */
+  .dmg{ position:absolute; pointer-events:none; color:#ffd9f7; text-shadow:0 0 6px #ff76d2 }
+
 </style>
 </head>
 <body>
   <div class="stage">
-    <div class="title">🎮 악령사냥 <small style="opacity:.7">v11.4</small></div>
+    <div class="title">🎮 악령사냥 <small style="opacity:.7">v11.5</small></div>
     <canvas id="game"></canvas>
 
     <div class="hud">
       <div>점수: <span id="score">0</span></div>
-      <div>무기: <span id="weapon">Pistol</span> <small id="unlocks" style="opacity:.7"></small></div>
-      <div>체력: <span id="hp">5</span> / <span id="hpmax">5</span></div>
+      <div id="weaponBox">무기: <span id="weapon">Pistol</span> <small id="unlocks" style="opacity:.7"></small>
+        <div class="heatmini" id="heatmini"><div class="fill" id="heatfillMini"></div></div>
+      </div>
+      <div>체력: <span id="hp">7</span> / <span id="hpmax">7</span></div>
       <div>보스: <span id="boss">-</span></div>
       <div>난이도: <span id="diff">1.00x</span></div>
       <div>상태: <span id="status">Survive</span></div>
@@ -52,9 +62,6 @@
       </div>
     </div>
 
-    <div id="heatbar" class="heatbar"><div id="heatfill" class="heatfill"></div></div>
-    <div id="heatlabel" class="heatlabel"></div>
-
     <div class="dashlabel" id="dashlabel">DASH READY (Shift)</div>
     <div class="dashbar"><div id="dashfill" class="dashfill"></div></div>
   </div>
@@ -67,7 +74,7 @@
     boss:qs('#boss'), diff:qs('#diff'), status:qs('#status'),
     overlay:qs('#overlay'), finalScore:qs('#finalScore'), retryBtn:qs('#retryBtn'),
     unlocks:qs('#unlocks'),
-    heatbar:qs('#heatbar'), heatfill:qs('#heatfill'), heatlabel:qs('#heatlabel'),
+    heatmini:qs('#heatmini'), heatfillMini:qs('#heatfillMini'),
     dashfill:qs('#dashfill'), dashlabel:qs('#dashlabel')
   };
   function qs(s){return document.querySelector(s)}
@@ -83,7 +90,8 @@
   const imgZoey=new Image(); imgZoey.src='zoey.png';
   const imgMira=new Image(); imgMira.src='mira.png';
   const imgAbby=new Image(); imgAbby.src='abby.png';
-  const imgBoom=new Image(); imgBoom.src='boom.png';   // Mira 폭발 이미지
+  const imgBoom=new Image(); imgBoom.src='boom.png';
+  const imgMystery=new Image(); imgMystery.src='mystery.png';
 
   // input
   const keys=new Set(); const mouse={x:0,y:0,down:false};
@@ -94,7 +102,7 @@
     if(k==='1') weapon.kind='pistol';
     if(k==='2' && weapon.unlocked.shotgun) weapon.kind='shotgun';
     if(k==='3' && weapon.unlocked.laser) weapon.kind='laser';
-    if(k==='shift') tryDash();                // 🔸 대쉬
+    if(k==='shift') tryDash();
     updateWeaponUI();
   });
   addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
@@ -104,36 +112,119 @@
   function setMouse(e){const r=canvas.getBoundingClientRect(); mouse.x=e.clientX-r.left; mouse.y=e.clientY-r.top;}
 
   // state
-  const MAX_HP=5, BASE_SPEED=230;
+  const MAX_HP=7, BASE_SPEED=230;
   const state={
     score:0,hp:MAX_HP,wave:1,boss:null,over:false,time:0,
-    invuln:0,                        // 일반 피격 무적(피격/대쉬로 증가)
-    diff:1.0, shield:null,          // zoey shield
-    explosions:[], flashes:[],
-    haste:0,                         // Mira 속도 버프 타이머
-    dash:{cd:0, t:0, active:false}  // 대쉬 상태
+    invuln:0,                        // 일반 피격 무적
+    diff:1.0, shield:null,          // Zoey
+    explosions:[], flashes:[], dmgTexts:[],
+    haste:0,
+    dash:{cd:0, t:0, active:false, postDelay:0},
+    nextMystery:350,                 // 350 단위로 출현
+    mysteries:[]
   };
   ui.hpmax.textContent=MAX_HP;
 
   const weapon={kind:'pistol',unlocked:{pistol:true,shotgun:false,laser:false}, heat:0, overheated:false};
-
   let player={x:canvas.width/2,y:canvas.height/2,r:22,speed:BASE_SPEED,fireCd:0};
 
   const enemies=[], enemyBullets=[], bullets=[], lasers=[], heals=[], items=[];
 
   // ---- Enemies ----
-  class EnemyBase{constructor(x,y){this.x=x;this.y=y;this.r=20;this.hp=3;this.dead=false;this.baseSpd=70;} aim(){return Math.atan2(player.y-this.y,player.x-this.x)}}
-  class EnemyChaser extends EnemyBase{update(dt){const s=this.baseSpd*state.diff, a=this.aim(); this.x+=Math.cos(a)*s*dt; this.y+=Math.sin(a)*s*dt; if(state.invuln<=0 && dist(this,player)<this.r+player.r){ damagePlayer(1); this.dead=true; }} draw(){ctx.drawImage(imgChaser,this.x-this.r,this.y-this.r,this.r*2,this.r*2);}}
-  class EnemyShooter extends EnemyBase{constructor(x,y){super(x,y); this.baseSpd=80; this.hp=2; this.moveT=1.1; this.stopT=0.8; this.timer=this.moveT; this.stopped=false; this.fireCd=0;} update(dt){this.timer-=dt; if(!this.stopped){const s=this.baseSpd*state.diff, a=this.aim(); this.x+=Math.cos(a)*s*dt; this.y+=Math.sin(a)*s*dt; if(this.timer<=0){this.stopped=true; this.timer=this.stopT/Math.min(state.diff,2);} } else { this.fireCd-=dt; if(this.fireCd<=0){const base=this.aim(), sp=0.10+Math.min(0.12,(state.diff-1)*0.04); enemyBullets.push(new EnemyBullet(this.x,this.y,base-sp,230*state.diff)); enemyBullets.push(new EnemyBullet(this.x,this.y,base+sp,230*state.diff)); this.fireCd=0.35/Math.min(state.diff,2.5);} if(this.timer<=0){this.stopped=false; this.timer=this.moveT;} } if(state.invuln<=0 && dist(this,player)<this.r+player.r){ damagePlayer(1); this.dead=true; }} draw(){ctx.drawImage(imgShooter,this.x-this.r,this.y-this.r,this.r*2,this.r*2); if(this.stopped){ctx.save(); ctx.strokeStyle='#b83bff'; ctx.globalAlpha=.8; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(this.x,this.y,this.r+4,0,Math.PI*2); ctx.stroke(); ctx.restore();}}}
-  class EnemyAbby extends EnemyBase{constructor(x,y){super(x,y); this.r=22; this.hp=3; this.baseSpd=120; this.mode='wander'; this.dir=Math.random()*Math.PI*2; this.timer=1.2;} update(dt){this.timer-=dt; if(this.mode==='wander'){this.x+=Math.cos(this.dir)*this.baseSpd*dt; this.y+=Math.sin(this.dir)*this.baseSpd*dt; if(this.timer<=0){ this.mode='charge'; this.timer=0.65; this.dir=this.aim(); }} else { this.x+=Math.cos(this.dir)*300*state.diff*dt; this.y+=Math.sin(this.dir)*300*state.diff*dt; if(this.timer<=0){ this.mode='wander'; this.timer=0.8+Math.random()*0.8; this.dir=Math.random()*Math.PI*2; } } this.bound(); if(state.invuln<=0 && dist(this,player)<this.r+player.r){ damagePlayer(1); this.dead=true; }} bound(){ this.x=Math.max(this.r,Math.min(canvas.width-this.r,this.x)); this.y=Math.max(this.r,Math.min(canvas.height-this.r,this.y)); } draw(){ ctx.drawImage(imgAbby,this.x-this.r,this.y-this.r,this.r*2,this.r*2); } }
-  class Boss{constructor(){this.x=canvas.width/2; this.y=100; this.r=46; this.baseHp=140; this.hp=Math.round(this.baseHp*state.diff); this.dead=false; this.shootCD=0.9/Math.min(state.diff,2.2); this._t=0;} update(dt){const s=55*state.diff, a=Math.atan2(player.y-this.y,player.x-this.x); this.x+=Math.cos(a)*s*dt; this.y+=Math.sin(a)*s*dt; if(dist(this,player)<this.r+player.r && state.invuln<=0) damagePlayer(2); this._t-=dt; if(this._t<=0){this._t=this.shootCD; if(Math.random()<.5){const base=Math.atan2(player.y-this.y,player.x-this.x); for(let i=-1;i<=1;i++) enemyBullets.push(new EnemyBullet(this.x,this.y,base+i*0.12,220*state.diff));} else {const n=8+Math.floor(state.diff*2); for(let i=0;i<n;i++) enemyBullets.push(new EnemyBullet(this.x,this.y,i*(Math.PI*2/n),180*state.diff));}}} draw(){ctx.drawImage(imgBoss,this.x-this.r,this.y-this.r,this.r*2,this.r*2);}}
+  class EnemyBase{constructor(x,y){this.x=x;this.y=y;this.r=20;this.hp=3;this.dead=false;this.baseSpd=70; this.spawnWarn=0.25;} aim(){return Math.atan2(player.y-this.y,player.x-this.x)}}
+  class EnemyChaser extends EnemyBase{
+    update(dt){if(this.spawnWarn>0){this.spawnWarn-=dt; return;}
+      const s=this.baseSpd*state.diff, a=this.aim(); this.x+=Math.cos(a)*s*dt; this.y+=Math.sin(a)*s*dt;
+      if(canDamage() && dist(this,player)<this.r+player.r){ damagePlayer(1); this.dead=true; }
+    }
+    draw(){ctx.drawImage(imgChaser,this.x-this.r,this.y-this.r,this.r*2,this.r*2); drawSpawnRing(this);}
+  }
+
+  class EnemyShooter extends EnemyBase{
+    constructor(x,y){super(x,y); this.baseSpd=80; this.hp=2; this.moveT=1.1; this.stopT=0.8; this.timer=this.moveT; this.stopped=false; this.fireCd=0;}
+    update(dt){ if(this.spawnWarn>0){this.spawnWarn-=dt; return;}
+      this.timer-=dt;
+      if(!this.stopped){const s=this.baseSpd*state.diff, a=this.aim(); this.x+=Math.cos(a)*s*dt; this.y+=Math.sin(a)*s*dt;
+        if(this.timer<=0){this.stopped=true; this.timer=this.stopT/Math.min(state.diff,2);}
+      } else {
+        this.fireCd-=dt;
+        if(this.fireCd<=0){
+          const base=this.aim();
+          enemyBullets.push(new EnemyBullet(this.x,this.y,base,260*state.diff)); // 🔸 한 발만 발사
+          this.fireCd=0.38/Math.min(state.diff,2.5);
+        }
+        if(this.timer<=0){this.stopped=false; this.timer=this.moveT;}
+      }
+      if(canDamage() && dist(this,player)<this.r+player.r){ damagePlayer(1); this.dead=true; }
+    }
+    draw(){ctx.drawImage(imgShooter,this.x-this.r,this.y-this.r,this.r*2,this.r*2); if(this.stopped){ctx.save(); ctx.strokeStyle='#b83bff'; ctx.globalAlpha=.8; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(this.x,this.y,this.r+4,0,Math.PI*2); ctx.stroke(); ctx.restore();} drawSpawnRing(this);}
+  }
+
+  class EnemyAbby extends EnemyBase{
+    constructor(x,y){super(x,y); this.r=22; this.hp=3; this.baseSpd=120; this.mode='wander'; this.dir=Math.random()*Math.PI*2; this.timer=1.2;}
+    update(dt){ if(this.spawnWarn>0){this.spawnWarn-=dt; return;}
+      this.timer-=dt;
+      if(this.mode==='wander'){this.x+=Math.cos(this.dir)*this.baseSpd*dt; this.y+=Math.sin(this.dir)*this.baseSpd*dt; if(this.timer<=0){ this.mode='charge'; this.timer=0.65; this.dir=this.aim(); }}
+      else { this.x+=Math.cos(this.dir)*300*state.diff*dt; this.y+=Math.sin(this.dir)*300*state.diff*dt; if(this.timer<=0){ this.mode='wander'; this.timer=0.8+Math.random()*0.8; this.dir=Math.random()*Math.PI*2; } }
+      this.bound(); if(canDamage() && dist(this,player)<this.r+player.r){ damagePlayer(1); this.dead=true; }
+    }
+    bound(){ this.x=Math.max(this.r,Math.min(canvas.width-this.r,this.x)); this.y=Math.max(this.r,Math.min(canvas.height-this.r,this.y)); }
+    draw(){ ctx.drawImage(imgAbby,this.x-this.r,this.y-this.r,this.r*2,this.r*2); drawSpawnRing(this); }
+  }
+
+  // Mystery: 350점 단위, 왼쪽에서 등장 → 예고 → 광역 공격 후 사라짐
+  class Mystery {
+    constructor(){
+      this.x=-40; this.y=Math.random()*(canvas.height*0.8)+canvas.height*0.1;
+      this.r=26; this.state='slide'; this.t=0; this.dead=false;
+      this.targetX=80; // 슬라이드 위치
+    }
+    update(dt){
+      this.t+=dt;
+      if(this.state==='slide'){
+        this.x+=240*dt; if(this.x>=this.targetX){ this.state='windup'; this.t=0; }
+      } else if(this.state==='windup'){ // 예고
+        if(this.t>=0.6){ this.state='blast'; this.t=0; }
+      } else if(this.state==='blast'){ // 폭발 판정
+        if(this.t===0) { doMysteryBlast(this.x,this.y); }
+        if(this.t>=0.2){ this.state='leave'; }
+      } else if(this.state==='leave'){
+        this.x-=320*dt; if(this.x<-60){ this.dead=true; }
+      }
+    }
+    draw(){
+      ctx.drawImage(imgMystery,this.x-this.r,this.y-this.r,this.r*2,this.r*2);
+      if(this.state==='windup'){
+        const p=Math.min(1,this.t/0.6);
+        ctx.save();
+        ctx.globalAlpha=0.3+0.5*p;
+        ctx.strokeStyle='#ff9ae6'; ctx.lineWidth=3;
+        ctx.beginPath(); ctx.arc(this.x,this.y, 40+60*p, 0, Math.PI*2); ctx.stroke();
+        ctx.restore();
+      }
+      if(this.state==='blast'){
+        const rad=40+300*(this.t/0.2);
+        ctx.save(); ctx.globalAlpha=0.25; ctx.fillStyle='#ff76d2'; ctx.beginPath(); ctx.arc(this.x,this.y,rad,0,Math.PI*2); ctx.fill(); ctx.restore();
+      }
+    }
+  }
+  function doMysteryBlast(x,y){
+    // 반경 140, 피해 2
+    if(canDamage() && Math.hypot(player.x-x,player.y-y) < 140){ damagePlayer(2); }
+  }
+
+  class Boss{constructor(){this.x=canvas.width/2; this.y=100; this.r=46; this.baseHp=140; this.hp=Math.round(this.baseHp*state.diff); this.dead=false; this.shootCD=0.9/Math.min(state.diff,2.2); this._t=0;}
+    update(dt){const s=55*state.diff, a=Math.atan2(player.y-this.y,player.x-this.x); this.x+=Math.cos(a)*s*dt; this.y+=Math.sin(a)*s*dt; if(canDamage() && dist(this,player)<this.r+player.r) damagePlayer(2);
+      this._t-=dt; if(this._t<=0){this._t=this.shootCD; if(Math.random()<.5){const base=Math.atan2(player.y-this.y,player.x-this.x); for(let i=-1;i<=1;i++) enemyBullets.push(new EnemyBullet(this.x,this.y,base+i*0.12,220*state.diff));} else {const n=8+Math.floor(state.diff*2); for(let i=0;i<n;i++) enemyBullets.push(new EnemyBullet(this.x,this.y,i*(Math.PI*2/n),180*state.diff));}}}
+    draw(){ctx.drawImage(imgBoss,this.x-this.r,this.y-this.r,this.r*2,this.r*2);}
+  }
 
   class Bullet{constructor(x,y,a,spd,dmg=1,maxDist=Infinity){this.x=x;this.y=y;this.r=4;this.vx=Math.cos(a)*spd;this.vy=Math.sin(a)*spd;this.dmg=dmg;this.max=maxDist;this.d=0;this.dead=false;} update(dt){const dx=this.vx*dt,dy=this.vy*dt; this.x+=dx; this.y+=dy; this.d+=Math.hypot(dx,dy); if(this.d>=this.max) this.dead=true; if(this.x<0||this.y<0||this.x>canvas.width||this.y>canvas.height) this.dead=true;} draw(){ctx.fillStyle='#73ffdf'; ctx.beginPath(); ctx.arc(this.x,this.y,this.r,0,Math.PI*2); ctx.fill();}}
   class EnemyBullet{constructor(x,y,a,spd){this.x=x;this.y=y;this.r=4;this.vx=Math.cos(a)*spd;this.vy=Math.sin(a)*spd;this.dead=false;} update(dt){this.x+=this.vx*dt; this.y+=this.vy*dt; if(this.x<-10||this.y<-10||this.x>canvas.width+10||this.y>canvas.height+10) this.dead=true;} draw(){ctx.fillStyle='#ff5fb1'; ctx.beginPath(); ctx.arc(this.x,this.y,this.r,0,Math.PI*2); ctx.fill();}}
 
   class Heal{ constructor(x,y){this.x=x; this.y=y; this.r=18; this.dead=false;} draw(){ctx.drawImage(imgHeal,this.x-this.r,this.y-this.r,this.r*2,this.r*2);} }
 
-  // ---- Laser (가시성 강화 + 첫 틱 보장) ----
+  // ---- Laser ----
   class LaserBeam{
     constructor(x,y,angle){ this.x=x; this.y=y; this.a=angle; this.t=0; this.state='charge'; this.charge=0.32; this.beam=0.24; this.tick=0; this.flash=0.12; }
     update(dt){
@@ -143,7 +234,7 @@
         this.tick+=dt;
         while(this.tick>=0.05){
           this.tick-=0.05;
-          enemies.forEach(e=>{ if(lineCircle(this.x,this.y,ex,ey,e.x,e.y,e.r)){ e.hp-=2; if(e.hp<=0){e.dead=true; addScore(10);} }});
+          enemies.forEach(e=>{ if(lineCircle(this.x,this.y,ex,ey,e.x,e.y,e.r)){ applyDamage(e,2); }});
           if(state.boss && !state.boss.dead && lineCircle(this.x,this.y,ex,ey,state.boss.x,state.boss.y,state.boss.r)){
             state.boss.hp-=2; if(state.boss.hp<=0){ onBossDead(); addScore(100); }
           }
@@ -158,35 +249,25 @@
       }else if(this.state==='beam'){
         ctx.save();
         ctx.globalCompositeOperation='lighter';
-        ctx.strokeStyle='#b83bff66'; ctx.lineWidth=18; ctx.beginPath(); ctx.moveTo(this.x,this.y); ctx.lineTo(ex,ey); ctx.stroke(); // glow
-        ctx.strokeStyle='#d080ff'; ctx.lineWidth=10; ctx.stroke();                                      // body
-        ctx.strokeStyle='#eaffff'; ctx.lineWidth=3; ctx.setLineDash([]); ctx.stroke();                  // core
+        ctx.strokeStyle='#b83bff66'; ctx.lineWidth=18; ctx.beginPath(); ctx.moveTo(this.x,this.y); ctx.lineTo(ex,ey); ctx.stroke();
+        ctx.strokeStyle='#d080ff'; ctx.lineWidth=10; ctx.stroke();
+        ctx.strokeStyle='#eaffff'; ctx.lineWidth=3; ctx.setLineDash([]); ctx.stroke();
         ctx.restore();
       }
     }
     get dead(){return this.state==='done'}
   }
 
-  // ---- Items + Explosion(boom.png) ----
+  // Items + Explosion(boom.png)
   class ZoeyItem{ constructor(x,y){this.x=x;this.y=y;this.r=18;this.dead=false;} draw(){ctx.drawImage(imgZoey,this.x-this.r,this.y-this.r,this.r*2,this.r*2);} }
   class MiraItem{ constructor(x,y){this.x=x;this.y=y;this.r=18;this.dead=false;} draw(){ctx.drawImage(imgMira,this.x-this.r,this.y-this.r,this.r*2,this.r*2);} }
-  class Explosion{
-    constructor(x,y){ this.x=x; this.y=y; this.t=0; this.duration=0.6; this.done=false; }
-    update(dt){ this.t += dt; if(this.t>=this.duration) this.done=true; }
-    draw(){
-      const p=this.t/this.duration;             // 0 → 1
-      const size = 240 + p*140;                 // 점점 커짐
-      ctx.save();
-      ctx.globalAlpha = 1 - p;
-      ctx.drawImage(imgBoom, this.x-size/2, this.y-size/2, size, size);
-      ctx.restore();
-    }
-  }
+  class Explosion{ constructor(x,y){ this.x=x; this.y=y; this.t=0; this.duration=0.6; this.done=false; } update(dt){ this.t += dt; if(this.t>=this.duration) this.done=true; } draw(){ const p=this.t/this.duration; const size = 240 + p*140; ctx.save(); ctx.globalAlpha = 1 - p; ctx.drawImage(imgBoom, this.x-size/2, this.y-size/2, size, size); ctx.restore(); } }
 
   // helpers
   function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
   function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
   function lineCircle(x1,y1,x2,y2,cx,cy,cr){const dx=x2-x1,dy=y2-y1,l2=dx*dx+dy*dy; let t=((cx-x1)*dx+(cy-y1)*dy)/l2; t=Math.max(0,Math.min(1,t)); const px=x1+t*dx, py=y1+t*dy; return Math.hypot(px-cx,py-cy)<=cr;}
+  function drawSpawnRing(e){ if(e.spawnWarn>0){ ctx.save(); ctx.globalAlpha=e.spawnWarn/0.25; ctx.strokeStyle='#b83bff'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(e.x,e.y,e.r+6,0,Math.PI*2); ctx.stroke(); ctx.restore(); } }
 
   // spawns
   function spawnEnemyEdge(){
@@ -212,22 +293,28 @@
     if(state.score>=500 && Math.random()<0.0008) items.push(new MiraItem(Math.random()*canvas.width,Math.random()*canvas.height));
   }
 
-  // scoring & damage
+  // damage / score / dmg text
   function addScore(n){ state.score+=n; ui.score.textContent=state.score; }
+  function floatDmg(x,y,val){ state.dmgTexts.push({x,y,t:0,txt:`-${val}`}); }
+  function applyDamage(e,amount){
+    e.hp-=amount; floatDmg(e.x,e.y,amount);
+    if(e.hp<=0){ e.dead=true; addScore(10); }
+  }
+
+  function canDamage(){ return !(state.dash.active) && state.invuln<=0 && !state.over; }
+
   function damagePlayer(n){
-    if(state.invuln>0) return;
-    if(state.shield){ state.shield=null; return; }   // 🔸 보호막만 소모, 이펙트 없음
+    if(!canDamage()) return;
+    if(state.shield){ state.shield=null; return; }   // Zoey: 이펙트 없음
     state.hp=Math.max(0,state.hp-n); ui.hp.textContent=state.hp; state.invuln=2.0;
     if(state.hp<=0) gameOver();
   }
 
   function onBossDead(){ if(!state.boss) return; state.boss.dead=true; state.boss=null; state.wave+=1; state.diff = Math.round(state.diff*1.28*100)/100; ui.diff.textContent=state.diff.toFixed(2)+'x'; ui.boss.textContent='-'; }
 
-  // ---- Fire & weapons ----
+  // ---- Fire & weapons (샷건 강화 유지) ----
   function fire(){
-    // 대쉬 중에는 발사 불가
-    if(state.dash.active) return;
-
+    if(state.dash.active || state.dash.postDelay>0) return; // 대쉬 중/대쉬 직후 지연
     if(weapon.kind==='pistol'){ spawnBullet(1,520,Infinity); player.fireCd=0.18; return; }
     if(weapon.kind==='shotgun' && weapon.unlocked.shotgun){
       const base=Math.atan2(mouse.y-player.y,mouse.x-player.x);
@@ -240,8 +327,7 @@
       lasers.push(new LaserBeam(player.x,player.y,a));
       weapon.heat=Math.min(100, weapon.heat+35);
       if(weapon.heat>=100) weapon.overheated=true;
-      player.fireCd=0.55;
-      return;
+      player.fireCd=0.55; return;
     }
   }
   function spawnBullet(dmg,spd,maxD){ const a=Math.atan2(mouse.y-player.y,mouse.x-player.x); bullets.push(new Bullet(player.x,player.y,a,spd,dmg,maxD)); }
@@ -250,9 +336,9 @@
   function tryDash(){
     if(state.dash.cd<=0 && !state.dash.active && !state.over){
       state.dash.active=true;
-      state.dash.t=0.4;                 // 지속
-      state.dash.cd=5.0;                // 쿨타임
-      state.invuln=Math.max(state.invuln,0.4); // 무적 보장
+      state.dash.t=0.4;
+      state.dash.cd=5.0;
+      state.invuln=Math.max(state.invuln,0.4);
     }
   }
 
@@ -268,34 +354,40 @@
     if(state.dash.cd>0) state.dash.cd=Math.max(0,state.dash.cd-dt);
     if(state.dash.active){
       state.dash.t-=dt;
-      if(state.dash.t<=0){ state.dash.active=false; }
-    }
+      if(state.dash.t<=0){ state.dash.active=false; state.dash.postDelay=0.1; }
+    } else if(state.dash.postDelay>0){ state.dash.postDelay=Math.max(0,state.dash.postDelay-dt); }
 
     // unlocks
     if(state.score>=100) weapon.unlocked.shotgun=true;
     if(state.score>=250) weapon.unlocked.laser=true;
     updateWeaponUI();
 
-    // heat cool & HUD
+    // HEAT mini bar
     const COOL=22;
     if(weapon.heat>0){ weapon.heat=Math.max(0, weapon.heat-COOL*dt); if(weapon.overheated && weapon.heat<=30) weapon.overheated=false; }
     const showHeat = (weapon.kind==='laser' && weapon.unlocked.laser);
-    ui.heatbar.style.display = showHeat ? 'block' : 'none';
+    ui.heatmini.style.display = showHeat ? 'inline-block' : 'none';
     if(showHeat){
-      ui.heatfill.style.width = Math.min(100, weapon.heat).toFixed(0)+'%';
-      ui.heatlabel.textContent = weapon.overheated ? 'Laser HEAT: OVERHEATED' : 'Laser HEAT';
-      ui.heatlabel.className = 'heatlabel' + (weapon.overheated ? ' overblink' : '');
-    } else ui.heatlabel.textContent='';
+      ui.heatfillMini.style.height = Math.min(100, weapon.heat) + '%';
+      ui.heatmini.classList.toggle('over', weapon.overheated);
+    }
 
     // dash HUD
     const ratio = (5 - state.dash.cd)/5;
     ui.dashfill.style.width = (Math.max(0, Math.min(1, ratio))*100) + '%';
     ui.dashlabel.textContent = state.dash.cd<=0 ? 'DASH READY (Shift)' : `DASH COOLDOWN ${state.dash.cd.toFixed(1)}s`;
+    ui.dashlabel.className = state.dash.cd<=0 ? 'dashlabel dashready' : 'dashlabel';
 
-    // spawns
+    // Spawns
     const spawnRate=0.012+(state.diff-1)*0.015;
     if(Math.random()<spawnRate) spawnEnemyEdge();
     maybeSpawnItems();
+
+    // Mystery 출현 (350 단위)
+    if(state.score>=state.nextMystery){
+      state.mysteries.push(new Mystery());
+      state.nextMystery += 350;
+    }
 
     enemies.forEach(e=>e.update(dt));
     bullets.forEach(b=>b.update(dt));
@@ -303,20 +395,20 @@
     enemyBullets.forEach(b=>b.update(dt));
     state.explosions.forEach(ex=>ex.update(dt));
     state.flashes.forEach(f=>f.t+=dt);
+    state.mysteries.forEach(m=>m.update(dt));
 
     if(state.boss) state.boss.update(dt);
 
-    // bullet collisions (shotgun 근접 보너스 + 넉백 유지)
+    // bullet collisions + 샷건 근접 보너스/넉백
     for(const b of bullets){
       for(const e of enemies){
         if(!e.dead && !b.dead && dist(e,b)<e.r+b.r){
           let dmg=b.dmg;
           const dToPlayer=dist(e,player);
-          if(b.max===260 && dToPlayer<=90) dmg*=1.5;
-          e.hp-=dmg;
+          if(b.max===260 && dToPlayer<=100) dmg*=1.5; // 근접 보너스(가시성↑)
+          applyDamage(e,dmg);
           if(b.max===260){ const dir=Math.atan2(e.y-player.y,e.x-player.x); const kb=80; e.x+=Math.cos(dir)*kb*0.06; e.y+=Math.sin(dir)*kb*0.06; }
           b.dead=true;
-          if(e.hp<=0){ e.dead=true; addScore(10); }
         }
       }
       if(state.boss && !b.dead && !state.boss.dead && dist(state.boss,b)<state.boss.r+b.r){
@@ -330,17 +422,15 @@
     for(const it of items){
       if(dist(it,player)<it.r+player.r){
         it.dead=true;
-        if(it instanceof ZoeyItem){
-          state.shield={angle:0,dist:28};
-        }else if(it instanceof MiraItem){
-          triggerMiraExplosion(player.x,player.y); // 폭발 + 가속
-        }
+        if(it instanceof ZoeyItem){ state.shield={angle:0,dist:28}; }
+        else if(it instanceof MiraItem){ triggerMiraExplosion(player.x,player.y); }
       }
     }
 
     cleanup(bullets); cleanup(enemies); cleanup(lasers); cleanup(enemyBullets); cleanup(heals); cleanup(items);
     for(let i=state.explosions.length-1;i>=0;i--) if(state.explosions[i].done) state.explosions.splice(i,1);
     for(let i=state.flashes.length-1;i>=0;i--) if(state.flashes[i].t>0.12) state.flashes.splice(i,1);
+    for(let i=state.mysteries.length-1;i>=0;i--) if(state.mysteries[i].dead) state.mysteries.splice(i,1);
 
     if(!state.boss && state.score>=state.wave*500){ state.boss=new Boss(); ui.boss.textContent='등장'; }
 
@@ -367,6 +457,7 @@
     ctx.clearRect(0,0,canvas.width,canvas.height);
 
     enemies.forEach(e=>e.draw());
+    state.mysteries.forEach(m=>m.draw());
     if(state.boss) state.boss.draw();
     bullets.forEach(b=>b.draw());
     enemyBullets.forEach(b=>b.draw());
@@ -382,6 +473,13 @@
       ctx.restore();
     });
 
+    // floating damage text
+    for(let i=state.dmgTexts.length-1;i>=0;i--){
+      const d=state.dmgTexts[i]; d.t+=1/60; const alpha=Math.max(0,1-d.t/0.6); if(alpha<=0){ state.dmgTexts.splice(i,1); continue; }
+      ctx.save(); ctx.globalAlpha=alpha; ctx.fillStyle='#ffd9f7'; ctx.font='bold 14px system-ui';
+      ctx.fillText(d.txt, d.x, d.y-10 - d.t*30); ctx.restore();
+    }
+
     // player blink when invuln
     const blink = state.invuln>0 ? (Math.sin(state.time*20)>0?0.45:1) : 1;
     ctx.save(); ctx.globalAlpha=blink; ctx.drawImage(imgPlayer,player.x-player.r,player.y-player.r,player.r*2,player.r*2); ctx.restore();
@@ -389,11 +487,17 @@
     // Zoey shield orbit
     if(state.shield){ state.shield.angle += 6/60; const sx = player.x + Math.cos(state.shield.angle)*state.shield.dist; const sy = player.y + Math.sin(state.shield.angle)*state.shield.dist; ctx.drawImage(imgZoey, sx-14, sy-14, 28, 28); }
 
-    // HP & Boss bars
+    // HP & Boss bars (+수치)
     const pad=14; const pRatio = state.hp/MAX_HP;
     ctx.fillStyle='#0f3a2a'; ctx.globalAlpha=.35; ctx.fillRect(pad,pad,canvas.width-pad*2,10); ctx.globalAlpha=1;
     const grad = ctx.createLinearGradient(pad,0,pad+(canvas.width-pad*2)*pRatio,0); grad.addColorStop(0,'#73ffdf'); grad.addColorStop(1,'#2dffc4'); ctx.fillStyle=grad; ctx.fillRect(pad,pad,(canvas.width-pad*2)*pRatio,10);
-    if(state.boss){ const bRatio = Math.max(0,Math.min(1, state.boss.hp/Math.round(140*state.diff))); ctx.fillStyle='#3b104f'; ctx.globalAlpha=.35; ctx.fillRect(pad,pad+16,canvas.width-pad*2,10); ctx.globalAlpha=1; const bgrad = ctx.createLinearGradient(pad,0,pad+(canvas.width-pad*2)*bRatio,0); bgrad.addColorStop(0,'#d080ff'); bgrad.addColorStop(1,'#b018ff'); ctx.fillStyle=bgrad; ctx.fillRect(pad,pad+16,(canvas.width-pad*2)*bRatio,10); }
+    if(state.boss){
+      const maxhp=Math.round(140*state.diff);
+      const bRatio = Math.max(0,Math.min(1, state.boss.hp/maxhp));
+      ctx.fillStyle='#3b104f'; ctx.globalAlpha=.35; ctx.fillRect(pad,pad+16,canvas.width-pad*2,10); ctx.globalAlpha=1;
+      const bgrad = ctx.createLinearGradient(pad,0,pad+(canvas.width-pad*2)*bRatio,0); bgrad.addColorStop(0,'#d080ff'); bgrad.addColorStop(1,'#b018ff'); ctx.fillStyle=bgrad; ctx.fillRect(pad,pad+16,(canvas.width-pad*2)*bRatio,10);
+      ctx.fillStyle='#e9d7ff'; ctx.font='12px system-ui'; ctx.fillText(`${Math.max(0, state.boss.hp)} / ${maxhp}`, pad+6, pad+25);
+    }
   }
 
   function cleanup(arr){ for(let i=arr.length-1;i>=0;i--) if(arr[i].dead) arr.splice(i,1) }
@@ -401,14 +505,15 @@
   function gameOver(){ state.over=true; ui.overlay.style.display='flex'; ui.finalScore.textContent='최종 점수: '+state.score; }
   function restart(){
     state.score=0; state.hp=MAX_HP; state.wave=1; state.boss=null; state.over=false; state.time=0; state.invuln=0;
-    state.diff=1.0; state.shield=null; state.explosions.length=0; state.flashes.length=0;
-    state.haste=0; state.dash={cd:0,t:0,active:false};
+    state.diff=1.0; state.shield=null; state.explosions.length=0; state.flashes.length=0; state.dmgTexts.length=0;
+    state.haste=0; state.dash={cd:0,t:0,active:false,postDelay:0}; state.nextMystery=350; state.mysteries.length=0;
     enemies.length=0; bullets.length=0; lasers.length=0; enemyBullets.length=0; heals.length=0; items.length=0;
     player.x=canvas.width/2; player.y=canvas.height/2; player.fireCd=0; player.speed=BASE_SPEED;
     weapon.kind='pistol'; weapon.unlocked={pistol:true,shotgun:false,laser:false}; weapon.heat=0; weapon.overheated=false;
     ui.overlay.style.display='none'; ui.score.textContent='0'; ui.hp.textContent=String(MAX_HP); ui.weapon.textContent='Pistol'; ui.boss.textContent='-'; ui.diff.textContent='1.00x';
-    updateWeaponUI(); ui.heatbar.style.display='none'; ui.heatlabel.textContent='';
-    ui.dashfill.style.width='100%'; ui.dashlabel.textContent='DASH READY (Shift)';
+    updateWeaponUI();
+    ui.dashfill.style.width='100%'; ui.dashlabel.textContent='DASH READY (Shift)'; ui.dashlabel.className='dashlabel dashready';
+    ui.heatmini.style.display='none';
   }
   ui.retryBtn.addEventListener('click',restart);
 
