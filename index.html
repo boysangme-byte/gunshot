@@ -20,11 +20,13 @@
     .panel h2 { margin:0 0 8px; color:#ffd1ff; text-shadow:0 0 12px #a03cff; }
     .btn { background:#2a1658; color:#fff; border:1px solid #5b3db3; padding:10px 16px; border-radius:10px; cursor:pointer; }
     .btn:hover{ filter:brightness(1.08); }
+    .heatbar { position:absolute; left:16px; bottom:12px; right:16px; height:8px; border:1px solid var(--line); border-radius:6px; background:#2a1b44; display:none; }
+    .heatfill { height:100%; border-radius:6px; background:linear-gradient(90deg,#7be7ff,#ff76d2); width:0%; }
   </style>
 </head>
 <body>
   <div class="stage">
-    <div class="title">🎮 악령사냥 <small style="opacity:.7;font-weight:600;">v8</small></div>
+    <div class="title">🎮 악령사냥 <small style="opacity:.7;font-weight:600;">v9</small></div>
     <canvas id="game"></canvas>
 
     <div id="overlay" class="overlay">
@@ -43,7 +45,8 @@
       <div>난이도: <span id="diff">1.00x</span></div>
       <div>상태: <span id="status">Survive</span></div>
     </div>
-    <div class="controls">WASD 이동 · 마우스 조준/클릭 발사 · 무기 1/2/3 전환</div>
+    <div class="controls">WASD 이동 · 마우스 조준/클릭 발사 · 무기 1/2/3 전환 (100점: 샷건, 250점: 레이저)</div>
+    <div id="heatbar" class="heatbar"><div id="heatfill" class="heatfill"></div></div>
   </div>
 
 <script>
@@ -52,7 +55,8 @@
   const ui={score:document.getElementById("score"), weapon:document.getElementById("weapon"),
             hp:document.getElementById("hp"), hpmax:document.getElementById("hpmax"), boss:document.getElementById("boss"), status:document.getElementById("status"),
             overlay:document.getElementById("overlay"), finalScore:document.getElementById("finalScore"),
-            retryBtn:document.getElementById("retryBtn"), unlocks:document.getElementById("unlocks"), diff:document.getElementById("diff")};
+            retryBtn:document.getElementById("retryBtn"), unlocks:document.getElementById("unlocks"), diff:document.getElementById("diff"),
+            heatbar:document.getElementById("heatbar"), heatfill:document.getElementById("heatfill")};
   function resize(){const r=canvas.getBoundingClientRect(); canvas.width=r.width; canvas.height=r.height;}
   new ResizeObserver(resize).observe(canvas);
 
@@ -74,7 +78,7 @@
   ui.hpmax.textContent=MAX_HP;
   let player={x:400,y:260,r:22,speed:230,fireCd:0};
   const bullets=[], enemies=[], heals=[], lasers=[], enemyBullets=[];
-  const weapon={kind:'pistol',unlocked:{pistol:true,shotgun:false,laser:false}};
+  const weapon={kind:'pistol',unlocked:{pistol:true,shotgun:false,laser:false}, heat:0, overheated:false};
 
   class EnemyBase{constructor(x,y){this.x=x;this.y=y;this.r=20;this.hp=3;this.dead=false;this.baseSpd=70;} aim(){return Math.atan2(player.y-this.y,player.x-this.x);}}
   class EnemyChaser extends EnemyBase{update(dt){const s=this.baseSpd*state.diff;const a=this.aim();this.x+=Math.cos(a)*s*dt;this.y+=Math.sin(a)*s*dt;if(!state.over&&state.invuln<=0&&dist(this,player)<this.r+player.r){hitPlayer();this.dead=true;}} draw(){ctx.drawImage(imgChaser,this.x-this.r,this.y-this.r,this.r*2,this.r*2);}}
@@ -85,7 +89,48 @@
   class Bullet{constructor(x,y,a,speed,dmg=1,maxDist=Infinity){this.x=x;this.y=y;this.r=4;this.vx=Math.cos(a)*speed;this.vy=Math.sin(a)*speed;this.dmg=dmg;this.dead=false;this.maxDist=maxDist;this.travel=0;} update(dt){const dx=this.vx*dt,dy=this.vy*dt;this.x+=dx;this.y+=dy;this.travel+=Math.hypot(dx,dy);if(this.x<0||this.y<0||this.x>canvas.width||this.y>canvas.height) this.dead=true; if(this.travel>=this.maxDist) this.dead=true;} draw(){ctx.fillStyle="#73ffdf";ctx.beginPath();ctx.arc(this.x,this.y,this.r,0,Math.PI*2);ctx.fill();}}
   class EnemyBullet{constructor(x,y,a,speed){this.x=x;this.y=y;this.r=4;this.vx=Math.cos(a)*speed;this.vy=Math.sin(a)*speed;this.dead=false;} update(dt){this.x+=this.vx*dt;this.y+=this.vy*dt;if(this.x<-10||this.y<-10||this.x>canvas.width+10||this.y>canvas.height+10)this.dead=true;} draw(){ctx.fillStyle="#ff5fb1";ctx.beginPath();ctx.arc(this.x,this.y,this.r,0,Math.PI*2);ctx.fill();}}
   class Heal{constructor(x,y){this.x=x;this.y=y;this.r=18;this.dead=false;} draw(){ctx.drawImage(imgHeal,this.x-this.r,this.y-this.r,this.r*2,this.r*2);}}
-  class LaserBeam{constructor(x,y,angle){this.x=x;this.y=y;this.a=angle;this.t=0;this.life=0.25;} update(dt){this.t+=dt;const ex=this.x+Math.cos(this.a)*1200,ey=this.y+Math.sin(this.a)*1200;enemies.forEach(e=>{if(lineCircle(this.x,this.y,ex,ey,e.x,e.y,e.r)){e.hp-=2;if(e.hp<=0){e.dead=true;addScore(10);}}});if(state.boss&&!state.boss.dead&&lineCircle(this.x,this.y,ex,ey,state.boss.x,state.boss.y,state.boss.r)){state.boss.hp-=2;if(state.boss.hp<=0){onBossDead();addScore(100);}}} draw(){const ex=this.x+Math.cos(this.a)*1200,ey=this.y+Math.sin(this.a)*1200;ctx.save();ctx.globalCompositeOperation='lighter';ctx.strokeStyle='#d080ff';ctx.lineWidth=6;ctx.beginPath();ctx.moveTo(this.x,this.y);ctx.lineTo(ex,ey);ctx.stroke();ctx.strokeStyle='#b83bff66';ctx.lineWidth=12;ctx.stroke();ctx.restore();} get dead(){return this.t>=this.life;}}
+
+  // Balanced Laser: charge + short beam + tick dmg + heat system
+  class LaserBeam{
+    constructor(x,y,angle){ this.x=x; this.y=y; this.a=angle; this.t=0; this.state='charge'; this.charge=0.35; this.beam=0.18; this.tick=0; }
+    update(dt){
+      this.t+=dt;
+      const endX = this.x + Math.cos(this.a)*1200;
+      const endY = this.y + Math.sin(this.a)*1200;
+      if(this.state==='charge'){ if(this.t>=this.charge){ this.state='beam'; this.t=0; } }
+      else if(this.state==='beam'){
+        // tick damage every 0.05s
+        this.tick+=dt;
+        while(this.tick>=0.05){
+          this.tick-=0.05;
+          enemies.forEach(e=>{
+            if(lineCircle(this.x,this.y,endX,endY,e.x,e.y,e.r)){ e.hp -= 1; if(e.hp<=0){ e.dead=true; addScore(10); } }
+          });
+          if(state.boss && !state.boss.dead && lineCircle(this.x,this.y,endX,endY,state.boss.x,state.boss.y,state.boss.r)){
+            state.boss.hp -= 1; if(state.boss.hp<=0){ onBossDead(); addScore(100); }
+          }
+        }
+        if(this.t>=this.beam){ this.state='done'; }
+      }
+    }
+    draw(){
+      const endX = this.x + Math.cos(this.a)*1200;
+      const endY = this.y + Math.sin(this.a)*1200;
+      if(this.state==='charge'){
+        // thin aim line
+        ctx.save(); ctx.globalAlpha=0.7; ctx.setLineDash([6,6]);
+        ctx.strokeStyle='#7be7ff'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(this.x,this.y); ctx.lineTo(endX,endY); ctx.stroke();
+        ctx.restore();
+      }else if(this.state==='beam'){
+        ctx.save();
+        ctx.globalCompositeOperation='lighter';
+        ctx.strokeStyle='#d080ff'; ctx.lineWidth=6; ctx.beginPath(); ctx.moveTo(this.x,this.y); ctx.lineTo(endX,endY); ctx.stroke();
+        ctx.strokeStyle='#b83bff66'; ctx.lineWidth=12; ctx.stroke();
+        ctx.restore();
+      }
+    }
+    get dead(){ return this.state==='done'; }
+  }
 
   function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y);} function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
   function lineCircle(x1,y1,x2,y2,cx,cy,cr){const dx=x2-x1,dy=y2-y1,l2=dx*dx+dy*dy;let t=((cx-x1)*dx+(cy-y1)*dy)/l2;t=Math.max(0,Math.min(1,t));const px=x1+t*dx,py=y1+t*dy;return Math.hypot(px-cx,py-cy)<=cr;}
@@ -94,21 +139,41 @@
 
   function hitPlayer(dmg=1){state.hp=Math.max(0,state.hp-dmg);ui.hp.textContent=state.hp;state.invuln=0.4;if(state.hp<=0) gameOver();}
 
-  function fire(){if(weapon.kind==='pistol'){spawnBullet(1,520);player.fireCd=0.18;return;} if(weapon.kind==='shotgun'&&weapon.unlocked.shotgun){const base=Math.atan2(mouse.y-player.y,mouse.x-player.x);for(let i=0;i<6;i++){const a=base+(Math.random()-0.5)*0.35;bullets.push(new Bullet(player.x,player.y,a,520,1,260));}player.fireCd=0.34;return;} if(weapon.kind==='laser'&&weapon.unlocked.laser){const a=Math.atan2(mouse.y-player.y,mouse.x-player.x);lasers.push(new LaserBeam(player.x,player.y,a));player.fireCd=0.5;return;}} 
-  function spawnBullet(dmg,speed){const a=Math.atan2(mouse.y-player.y,mouse.x-player.x);bullets.push(new Bullet(player.x,player.y,a,speed,dmg));}
-  function addScore(n){state.score+=n;ui.score.textContent=state.score;}
-  function onBossDead(){if(!state.boss) return; state.boss.dead=true; state.boss=null; state.wave+=1; state.diff=Math.round(state.diff*1.28*100)/100; ui.diff.textContent=state.diff.toFixed(2)+'x'; ui.boss.textContent='-';}
+  function fire(){
+    if(weapon.kind==='pistol'){
+      spawnBullet(1,520); player.fireCd=0.18; return;
+    }
+    if(weapon.kind==='shotgun'&&weapon.unlocked.shotgun){
+      const base=Math.atan2(mouse.y-player.y,mouse.x-player.x);
+      for(let i=0;i<6;i++){ const a=base+(Math.random()-0.5)*0.35; bullets.push(new Bullet(player.x,player.y,a,520,1,260)); }
+      player.fireCd=0.34; return;
+    }
+    if(weapon.kind==='laser'&&weapon.unlocked.laser){
+      if(weapon.overheated || weapon.heat>=100){ weapon.overheated=true; return; }
+      const a=Math.atan2(mouse.y-player.y,mouse.x-player.x);
+      lasers.push(new LaserBeam(player.x, player.y, a));
+      weapon.heat = Math.min(100, weapon.heat + 35);
+      if(weapon.heat>=100) weapon.overheated=true;
+      player.fireCd=0.65; return;
+    }
+  }
+  function spawnBullet(dmg,speed){ const a=Math.atan2(mouse.y-player.y,mouse.x-player.x); bullets.push(new Bullet(player.x,player.y,a,speed,dmg)); }
+  function addScore(n){ state.score+=n; ui.score.textContent=state.score; }
+  function onBossDead(){ if(!state.boss) return; state.boss.dead=true; state.boss=null; state.wave+=1; state.diff=Math.round(state.diff*1.28*100)/100; ui.diff.textContent=state.diff.toFixed(2)+'x'; ui.boss.textContent='-'; }
 
   function update(dt){
     if(state.over) return;
     state.time+=dt; if(state.invuln>0) state.invuln-=dt;
     if(state.score>=100) weapon.unlocked.shotgun=true; if(state.score>=250) weapon.unlocked.laser=true; updateWeaponUI();
+
+    // heat system
+    const coolRate = 22; // per second
+    if(weapon.heat>0){ weapon.heat = Math.max(0, weapon.heat - coolRate*dt); if(weapon.overheated && weapon.heat<=40) weapon.overheated=false; }
+    ui.heatfill.style.width = Math.min(100, weapon.heat).toFixed(0)+'%';
+    ui.heatbar.style.display = (weapon.kind==='laser' && weapon.unlocked.laser)? 'block':'none';
+
     const baseSpawn=0.012+(state.diff-1)*0.015; if(Math.random()<baseSpawn) spawnEnemyEdge();
-    enemies.forEach(e=>e.update(dt));
-    bullets.forEach(b=>b.update(dt));
-    lasers.forEach(l=>l.update(dt));
-    enemyBullets.forEach(eb=>eb.update(dt));
-    // >>> FIX: update boss each frame so it moves & shoots
+    enemies.forEach(e=>e.update(dt)); bullets.forEach(b=>b.update(dt)); lasers.forEach(l=>l.update(dt)); enemyBullets.forEach(eb=>eb.update(dt));
     if(state.boss) state.boss.update(dt);
 
     for(const b of bullets){
@@ -148,9 +213,9 @@
 
   function gameOver(){ state.over=true; ui.overlay.style.display='flex'; ui.finalScore.textContent='최종 점수: '+state.score; }
   function restart(){ state.score=0; state.hp=MAX_HP; state.wave=1; state.boss=null; state.over=false; state.time=0; state.invuln=1.2; state.diff=1.0;
-    enemies.length=0; bullets.length=0; heals.length=0; lasers.length=0; enemyBullets.length=0;
+    enemies.length=0; bullets.length=0; heals.length=0; lasers.length=0; enemyBullets.length=0; weapon.heat=0; weapon.overheated=false;
     player.x=canvas.width/2; player.y=canvas.height/2; player.fireCd=0; weapon.kind='pistol'; weapon.unlocked={pistol:true,shotgun:false,laser:false};
-    ui.overlay.style.display='none'; ui.score.textContent='0'; ui.hp.textContent=String(MAX_HP); ui.weapon.textContent='Pistol'; ui.boss.textContent='-'; ui.diff.textContent='1.00x'; updateWeaponUI(); }
+    ui.overlay.style.display='none'; ui.score.textContent='0'; ui.hp.textContent=String(MAX_HP); ui.weapon.textContent='Pistol'; ui.boss.textContent='-'; ui.diff.textContent='1.00x'; updateWeaponUI(); ui.heatfill.style.width='0%'; }
   ui.retryBtn.addEventListener('click', restart);
 
   function updateWeaponUI(){ ui.weapon.textContent=weapon.kind.charAt(0).toUpperCase()+weapon.kind.slice(1);
