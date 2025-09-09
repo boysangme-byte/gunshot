@@ -1,539 +1,113 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="utf-8" />
+  <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
-  <title>무한 서바이벌 슈터 — FX & 무기 & 모바일 조작</title>
+  <title>악령사냥</title>
   <style>
-    :root { --bg:#0e1022; --panel:#151936; --line:#2a2f5a; --text:#e6e8ff; --accent:#95d1ff; --danger:#ff8fa3; --good:#8fffbe; }
-    *{ box-sizing: border-box; }
-    html, body { height:100%; }
-    body { margin:0; background: radial-gradient(1200px 800px at 70% 20%, #14183b, var(--bg)); color:var(--text);
-           font-family: ui-sans-serif, system-ui, -apple-system, "Noto Sans KR", Segoe UI, Roboto, Helvetica, Arial;
-           display:grid; place-items:center; }
-    .wrap { width:100%; max-width: 980px; padding: 12px; }
-    .topbar { display:grid; grid-template-columns:1fr auto; align-items:center; gap:8px; margin-bottom:8px; }
-    .brand { font-weight:800; letter-spacing:.3px; }
-    .btn { background:var(--panel); border:1px solid var(--line); color:var(--text); padding:8px 12px; border-radius:12px; cursor:pointer; }
-    .btn:hover { filter:brightness(1.07); }
-    #game { width:100%; aspect-ratio:16/9; display:block; background:#0b0e22; border:1px solid var(--line); border-radius:16px; touch-action:none; }
-    .hud { display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); gap:8px; margin-top:8px; }
-    .card { background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,0)); border:1px solid var(--line);
-            border-radius:12px; padding:8px 10px; font-size:14px; }
-    .help { opacity:.85; font-size:13px; margin-top:8px; line-height:1.5; }
-    .kbd { padding:2px 6px; border-radius:6px; border:1px solid var(--line); background:#14183b; }
-    /* Mobile controls */
-    .controls { position:relative; }
-    .stick { position:absolute; left:14px; bottom:14px; width:120px; height:120px; border-radius:50%;
-             background:#0f1438aa; border:1px solid #2a2f5a; touch-action:none; }
-    .nub { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:60px; height:60px; border-radius:50%;
-           background:#2a2f5a; border:2px solid #6ea3ff; }
-    .btnA, .btnB { position:absolute; right:20px; border-radius:50%; width:70px; height:70px; background:#1a2154aa; border:2px solid #6ea3ff; touch-action:none; }
-    .btnA { bottom:20px; }
-    .btnB { bottom:105px; }
-    .btnLabel { position:absolute; width:100%; text-align:center; top:50%; transform:translateY(-50%); font-weight:700; color:#e6e8ff; text-shadow:0 1px 2px #000; pointer-events:none;}
-    @media (min-width: 900px) {
-      .stick, .btnA, .btnB { display:none; } /* hide mobile UI on bigger screens */
-    }
+    :root { --bg:#0a0014; --panel:#150b2c; --line:#3a2360; --text:#e9d7ff; --accent:#d080ff; --danger:#ff4fa0; --good:#73ffdf; }
+    *{ box-sizing:border-box; }
+    body { margin:0; background: radial-gradient(900px 600px at 70% 20%, #1a0038, var(--bg)); color:var(--text);
+           font-family: "Noto Sans KR", system-ui, sans-serif; display:grid; place-items:center; height:100vh; }
+    #game { width:100%; max-width:960px; aspect-ratio:16/9; border:2px solid var(--line); border-radius:12px;
+            background:#000; display:block; touch-action:none; }
+    .hud { display:flex; gap:12px; margin-top:6px; font-size:14px; }
+    .hud div { background:rgba(255,255,255,0.05); border:1px solid var(--line); padding:6px 10px; border-radius:8px; }
+    .title { font-weight:900; font-size:20px; margin-bottom:8px; color:var(--accent); text-shadow:0 0 8px var(--accent); }
+    .controls { font-size:13px; opacity:.8; margin-top:4px; }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="topbar">
-      <div class="brand">🎯 무한 서바이벌 슈터 — FX/사운드/무기/모바일</div>
-      <div><button id="restart" class="btn">다시 시작 (R)</button></div>
-    </div>
-
-    <div class="controls" style="position:relative;">
-      <canvas id="game"></canvas>
-      <!-- Mobile virtual joystick & buttons -->
-      <div id="stick" class="stick">
-        <div id="nub" class="nub"></div>
-      </div>
-      <div id="btnA" class="btnA"><div class="btnLabel">FIRE</div></div>
-      <div id="btnB" class="btnB"><div class="btnLabel">DASH</div></div>
-    </div>
-
+  <div>
+    <div class="title">🎮 악령사냥</div>
+    <canvas id="game"></canvas>
     <div class="hud">
-      <div class="card">점수: <b id="score">0</b></div>
-      <div class="card">웨이브: <b id="wave">1</b></div>
-      <div class="card">난이도: <b id="diff">1.0x</b></div>
-      <div class="card">무기: <b id="weapon">Pistol</b></div>
-      <div class="card">상태: <b id="status">Survive</b></div>
+      <div>점수: <span id="score">0</span></div>
+      <div>무기: <span id="weapon">Pistol</span></div>
+      <div>체력: <span id="hp">5</span></div>
+      <div>보스: <span id="boss">-</span></div>
+      <div>상태: <span id="status">Survive</span></div>
     </div>
-
-    <div class="help">
-      조작 — 이동 <span class="kbd">W</span><span class="kbd">A</span><span class="kbd">S</span><span class="kbd">D</span> · 조준: 마우스 · 발사: <span class="kbd">Left Click</span> · 대시: <span class="kbd">Shift</span><br/>
-      무기 업그레이드 — 점수 100: 샷건, 250: 레이저 (숫자 <span class="kbd">1</span>/<span class="kbd">2</span>/<span class="kbd">3</span> 로 무기 전환).<br/>
-      모바일 — 좌측 가상 스틱 이동, 우측 <b>FIRE</b>/<b>DASH</b> 버튼 사용.
-    </div>
+    <div class="controls">WASD 이동 · 마우스 조준/클릭 발사 · Shift 대시 · 무기 1/2/3 전환</div>
   </div>
 
-  <script>
-  (() => {
-    const canvas = document.getElementById('game');
-    const ctx = canvas.getContext('2d');
-    const ui = {
-      score: document.getElementById('score'),
-      wave: document.getElementById('wave'),
-      diff: document.getElementById('diff'),
-      status: document.getElementById('status'),
-      weapon: document.getElementById('weapon'),
-      restart: document.getElementById('restart')
-    };
+<script>
+(() => {
+  const canvas=document.getElementById("game"), ctx=canvas.getContext("2d");
+  const ui={score:document.getElementById("score"), weapon:document.getElementById("weapon"),
+            hp:document.getElementById("hp"), boss:document.getElementById("boss"), status:document.getElementById("status")};
+  function resize(){const r=canvas.getBoundingClientRect(); canvas.width=r.width; canvas.height=r.height;}
+  new ResizeObserver(resize).observe(canvas);
 
-    // DPI scale & size
-    function resize() {
-      const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-      const { width, height } = canvas.getBoundingClientRect();
-      canvas.width = Math.round(width * dpr);
-      canvas.height = Math.round(height * dpr);
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    }
-    new ResizeObserver(resize).observe(canvas);
+  // Load images
+  const imgPlayer=new Image(); imgPlayer.src="player.png";
+  const imgEnemy=new Image(); imgEnemy.src="enemy.png";
+  const imgBoss=new Image(); imgBoss.src="boss.png";
+  const imgHeal=new Image(); imgHeal.src="heal.png";
 
-    // Audio (WebAudio simple beeps)
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    let actx, masterGain;
-    function initAudio(){
-      if(actx) return;
-      actx = new AudioCtx();
-      masterGain = actx.createGain();
-      masterGain.gain.value = 0.15;
-      masterGain.connect(actx.destination);
-    }
-    function beep(freq=500, dur=0.08, type='square'){
-      if(!actx) return;
-      const o = actx.createOscillator();
-      const g = actx.createGain();
-      o.type = type; o.frequency.value = freq;
-      g.gain.value = 0.0001;
-      o.connect(g); g.connect(masterGain);
-      const t = actx.currentTime;
-      g.gain.exponentialRampToValueAtTime(0.6, t+0.01);
-      g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
-      o.start(t); o.stop(t+dur);
-    }
+  const keys=new Set(); const mouse={x:0,y:0,down:false};
+  window.addEventListener("keydown",e=>{keys.add(e.key.toLowerCase());});
+  window.addEventListener("keyup",e=>{keys.delete(e.key.toLowerCase());});
+  canvas.addEventListener("mousedown",()=>mouse.down=true);
+  window.addEventListener("mouseup",()=>mouse.down=false);
+  canvas.addEventListener("mousemove",e=>{const r=canvas.getBoundingClientRect(); mouse.x=e.clientX-r.left; mouse.y=e.clientY-r.top;});
 
-    // Input
-    const keys = new Set();
-    const mouse = { x:0, y:0, down:false };
-    window.addEventListener('keydown', e => {
-      keys.add(e.key.toLowerCase());
-      if(e.key==='r') restart();
-      if(e.key==='1') weapon.kind='pistol';
-      if(e.key==='2' && weapon.unlocked.shotgun) weapon.kind='shotgun';
-      if(e.key==='3' && weapon.unlocked.laser) weapon.kind='laser';
-    }, {passive:true});
-    window.addEventListener('keyup',   e => { keys.delete(e.key.toLowerCase()); }, {passive:true});
-    canvas.addEventListener('pointerdown', e => { mouse.down = true; initAudio(); }, {passive:true});
-    window.addEventListener('pointerup', () => mouse.down = false, {passive:true});
-    canvas.addEventListener('pointermove', e => {
-      const r = canvas.getBoundingClientRect(); mouse.x = e.clientX - r.left; mouse.y = e.clientY - r.top;
-    }, {passive:true});
+  const state={w:0,h:0,score:0,hp:5,weapon:"pistol",wave:1,boss:null,over:false,time:0,laserTimer:0,heals:[]};
+  let player={x:300,y:300,r:20,speed:220,fireCd:0};
 
-    // Mobile virtual controls
-    const stick = document.getElementById('stick');
-    const nub = document.getElementById('nub');
-    const btnA = document.getElementById('btnA'); // FIRE
-    const btnB = document.getElementById('btnB'); // DASH
-    let joy = {active:false, dx:0, dy:0};
-    function handleStickStart(e){
-      e.preventDefault();
-      joy.active = true;
-      handleStickMove(e);
-      initAudio();
-    }
-    function handleStickEnd(e){
-      e.preventDefault();
-      joy.active = false; joy.dx=0; joy.dy=0;
-      nub.style.left='50%'; nub.style.top='50%';
-    }
-    function handleStickMove(e){
-      e.preventDefault();
-      const touch = e.touches ? e.touches[0] : e;
-      const r = stick.getBoundingClientRect();
-      const cx = r.left + r.width/2;
-      const cy = r.top + r.height/2;
-      let dx = touch.clientX - cx;
-      let dy = touch.clientY - cy;
-      const max = r.width*0.45;
-      const len = Math.hypot(dx,dy);
-      if(len>max){ dx = dx/len*max; dy = dy/len*max; }
-      nub.style.left = (50 + dx/r.width*100) + '%';
-      nub.style.top  = (50 + dy/r.height*100) + '%';
-      joy.dx = dx/max; joy.dy = dy/max;
-    }
-    stick.addEventListener('touchstart', handleStickStart, {passive:false});
-    stick.addEventListener('touchmove', handleStickMove, {passive:false});
-    stick.addEventListener('touchend', handleStickEnd, {passive:false});
-    stick.addEventListener('touchcancel', handleStickEnd, {passive:false});
+  const bullets=[], enemies=[];
+  class Enemy{constructor(x,y){this.x=x;this.y=y;this.r=18;this.spd=60;this.hp=1;this.dead=false;}
+    update(dt){const a=Math.atan2(player.y-this.y,player.x-this.x);this.x+=Math.cos(a)*this.spd*dt;this.y+=Math.sin(a)*this.spd*dt;
+      if(Math.hypot(this.x-player.x,this.y-player.y)<this.r+player.r){ hitPlayer(); this.dead=true; }}
+    draw(){ctx.drawImage(imgEnemy,this.x-this.r,this.y-this.r,this.r*2,this.r*2);}}
+  class Boss{constructor(){this.x=canvas.width/2;this.y=60;this.r=40;this.hp=60;this.dead=false;}
+    update(dt){const a=Math.atan2(player.y-this.y,player.x-this.x);this.x+=Math.cos(a)*40*dt;this.y+=Math.sin(a)*40*dt;
+      if(Math.hypot(this.x-player.x,this.y-player.y)<this.r+player.r){ hitPlayer(2); }}
+    draw(){ctx.drawImage(imgBoss,this.x-this.r,this.y-this.r,this.r*2,this.r*2);
+      ctx.fillStyle="#f0f"; ctx.fillRect(this.x-40,this.y+this.r+8,80*(this.hp/60),6);}}
+  class Bullet{constructor(x,y,a,speed,dmg=1){this.x=x;this.y=y;this.r=4;this.vx=Math.cos(a)*speed;this.vy=Math.sin(a)*speed;this.dmg=dmg;this.dead=false;}
+    update(dt){this.x+=this.vx*dt;this.y+=this.vy*dt; if(this.x<0||this.y<0||this.x>canvas.width||this.y>canvas.height) this.dead=true;}
+    draw(){ctx.fillStyle="#73ffdf";ctx.beginPath();ctx.arc(this.x,this.y,this.r,0,Math.PI*2);ctx.fill();}}
+  class Heal{constructor(x,y){this.x=x;this.y=y;this.r=18;this.dead=false;}
+    draw(){ctx.drawImage(imgHeal,this.x-this.r,this.y-this.r,this.r*2,this.r*2);}}
 
-    let fireHold=false;
-    btnA.addEventListener('touchstart', e=>{ e.preventDefault(); fireHold=true; initAudio(); }, {passive:false});
-    btnA.addEventListener('touchend',   e=>{ e.preventDefault(); fireHold=false; }, {passive:false});
-    btnB.addEventListener('touchstart', e=>{ e.preventDefault(); dashRequest=true; initAudio(); }, {passive:false});
+  function hitPlayer(dmg=1){state.hp-=dmg; ui.hp.textContent=state.hp; if(state.hp<=0) state.over=true;}
+  function fire(){if(state.weapon==="pistol"){spawnBullet(1,520);} else if(state.weapon==="shotgun"){for(let i=0;i<5;i++){spawnBullet(1,480,(Math.random()-0.5)*0.3);}}
+    else if(state.weapon==="laser"){ state.laserTimer=0.25; dealLaser(); }}
+  function spawnBullet(dmg,speed,spread=0){const a=Math.atan2(mouse.y-player.y,mouse.x-player.x)+spread; bullets.push(new Bullet(player.x,player.y,a,speed,dmg));}
+  function dealLaser(){if(state.boss&&!state.boss.dead&&Math.hypot(state.boss.x-player.x,state.boss.y-player.y)<600){state.boss.hp-=2;if(state.boss.hp<=0){state.boss.dead=true;state.score+=500;}} enemies.forEach(e=>{if(Math.hypot(e.x-player.x,e.y-player.y)<600){e.dead=true;state.score+=10;}});}
 
-    // Utils
-    const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-    const rand=(a,b)=>a+Math.random()*(b-a);
-    const angTo=(ax,ay,bx,by)=>Math.atan2(by-ay,bx-ax);
+  function update(dt){state.time+=dt;
+    // spawn enemies
+    if(Math.random()<0.02) enemies.push(new Enemy(Math.random()*canvas.width,Math.random()*canvas.height));
+    enemies.forEach(e=>e.update(dt));
+    bullets.forEach(b=>b.update(dt));
+    enemies.forEach(e=>{bullets.forEach(b=>{if(!e.dead&&!b.dead&&Math.hypot(e.x-b.x,e.y-b.y)<e.r+b.r){e.dead=true;b.dead=true;state.score+=10;}});});
+    if(state.boss){state.boss.update(dt); bullets.forEach(b=>{if(!b.dead&&Math.hypot(b.x-state.boss.x,b.y-state.boss.y)<state.boss.r+b.r){b.dead=true;state.boss.hp-=1;if(state.boss.hp<=0){state.boss.dead=true;state.score+=500;}}}); if(state.boss.dead){state.boss=null; state.wave++;}}
+    if(state.score>=500*state.wave && !state.boss){state.boss=new Boss(); ui.boss.textContent="나옴";}
+    // heals
+    if(Math.random()<0.001) state.heals.push(new Heal(Math.random()*canvas.width,Math.random()*canvas.height));
+    state.heals.forEach(h=>{if(Math.hypot(h.x-player.x,h.y-player.y)<h.r+player.r){state.hp++;ui.hp.textContent=state.hp;h.dead=true;}});
+    state.heals=state.heals.filter(h=>!h.dead);
 
-    // Particles
-    const particles=[];
-    class Particle{
-      constructor(x,y,color,life,sz,vx,vy){ this.x=x; this.y=y; this.color=color; this.life=life; this.sz=sz; this.vx=vx; this.vy=vy; }
-      update(dt){ this.life-=dt; this.x+=this.vx*dt; this.y+=this.vy*dt; this.vy+=10*dt; }
-      draw(){ if(this.life<=0) return; ctx.globalAlpha = Math.max(0, this.life); ctx.fillStyle=this.color; ctx.beginPath(); ctx.arc(this.x,this.y,this.sz,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1; }
-    }
-    function burst(x,y,color,count=12,speed=180){
-      for(let i=0;i<count;i++){
-        const a=rand(0,Math.PI*2); const v=rand(speed*0.4,speed);
-        particles.push(new Particle(x,y,color, rand(0.2,0.7), rand(1,3), Math.cos(a)*v, Math.sin(a)*v));
-      }
-    }
+    // player move
+    let dx=(keys.has("d")?1:0)-(keys.has("a")?1:0); let dy=(keys.has("s")?1:0)-(keys.has("w")?1:0);
+    const len=Math.hypot(dx,dy)||1; player.x+=dx/len*player.speed*dt; player.y+=dy/len*player.speed*dt;
+    player.x=Math.max(player.r,Math.min(canvas.width-player.r,player.x)); player.y=Math.max(player.r,Math.min(canvas.height-player.r,player.y));
+    if(mouse.down){player.fireCd-=dt; if(player.fireCd<=0){fire(); player.fireCd=state.weapon==="shotgun"?0.35:0.18;}}
+    if(state.score>=100) state.weapon="shotgun"; if(state.score>=250) state.weapon="laser"; ui.weapon.textContent=state.weapon;
+    ui.score.textContent=state.score; if(state.boss&&!state.boss.dead) ui.boss.textContent="활성"; else ui.boss.textContent="-";
+    if(state.laserTimer>0){state.laserTimer-=dt; dealLaser();}
+  }
 
-    // Entities
-    class Entity{
-      constructor(x,y,r){ this.x=x; this.y=y; this.r=r; this.vx=0; this.vy=0; this.dead=false; }
-      draw(){}
-    }
+  function draw(){ctx.clearRect(0,0,canvas.width,canvas.height);
+    enemies.forEach(e=>e.draw()); if(state.boss&&!state.boss.dead) state.boss.draw(); bullets.forEach(b=>b.draw()); state.heals.forEach(h=>h.draw());
+    ctx.drawImage(imgPlayer,player.x-player.r,player.y-player.r,player.r*2,player.r*2);
+    if(state.laserTimer>0){ctx.strokeStyle="#d080ff"; ctx.shadowColor="#d080ff"; ctx.shadowBlur=12; ctx.lineWidth=6; ctx.beginPath(); ctx.moveTo(player.x,player.y); ctx.lineTo(mouse.x,mouse.y); ctx.stroke(); ctx.shadowBlur=0;}
+  }
 
-    // Skins
-    function drawSkinnedEnemy(x,y,r,phase=0){
-      const grd = ctx.createRadialGradient(x-3,y-3, r*0.3, x,y,r);
-      grd.addColorStop(0, '#ffb0bf'); grd.addColorStop(1, '#d24462');
-      ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
-      // eye
-      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x-3,y-2, r*0.28, 0, Math.PI*2); ctx.fill();
-      ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(x-3+Math.sin(phase)*2, y-2, r*0.15, 0, Math.PI*2); ctx.fill();
-      // seam
-      ctx.strokeStyle='#5a0e22'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(x,y,r*0.6, 0.2, Math.PI-0.2); ctx.stroke();
-    }
-    function drawSkinnedBoss(x,y,r,hpRatio){
-      const grd = ctx.createRadialGradient(x-6,y-6, r*0.2, x,y,r);
-      grd.addColorStop(0, '#ffe6a9'); grd.addColorStop(1, '#bf7b10');
-      ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
-      // horns
-      ctx.fillStyle='#2a2005'; ctx.beginPath(); ctx.moveTo(x-r*0.6,y-r*0.4); ctx.lineTo(x-r*0.15,y-r*0.9); ctx.lineTo(x-r*0.05,y-r*0.2); ctx.closePath(); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(x+r*0.6,y-r*0.4); ctx.lineTo(x+r*0.15,y-r*0.9); ctx.lineTo(x+r*0.05,y-r*0.2); ctx.closePath(); ctx.fill();
-      // HP bar under
-      const w=110, h=8;
-      ctx.fillStyle='#0007'; ctx.fillRect(x-w/2, y+r+10, w, h);
-      ctx.fillStyle='#ffd28f'; ctx.fillRect(x-w/2, y+r+10, w*hpRatio, h);
-    }
-    function drawPlayer(x,y,r,phase=0){
-      const grd = ctx.createRadialGradient(x-3,y-3, r*0.2, x,y,r);
-      grd.addColorStop(0, '#a9d6ff'); grd.addColorStop(1, '#2a72c9');
-      ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
-      // headband
-      ctx.strokeStyle='#101a3a'; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(x,y,r*0.75, Math.PI*0.2, Math.PI*0.8); ctx.stroke();
-      // eye
-      ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(x+3,y-2, r*0.25, 0, Math.PI*2); ctx.fill();
-      ctx.fillStyle='#111'; ctx.beginPath(); ctx.arc(x+3+Math.sin(phase)*2, y-2, r*0.12, 0, Math.PI*2); ctx.fill();
-    }
-
-    class Player extends Entity{
-      constructor(x,y){ super(x,y,12); this.speed=230; this.hp=6; this.fire=0; this.fireRate=0.15; this.dash=1; this.dashing=0; }
-      update(dt){
-        // input
-        let dx=(keys.has('d')?1:0)-(keys.has('a')?1:0);
-        let dy=(keys.has('s')?1:0)-(keys.has('w')?1:0);
-        // mobile stick
-        dx += joy.dx||0; dy += joy.dy||0;
-        dx = clamp(dx, -1, 1); dy = clamp(dy, -1, 1);
-        const len=Math.hypot(dx,dy)||1;
-        const spd = this.speed * (this.dashing>0?2.4:1);
-        this.x += (dx/len)*spd*dt; this.y += (dy/len)*spd*dt;
-        this.x = clamp(this.x, this.r, state.w - this.r);
-        this.y = clamp(this.y, this.r, state.h - this.r);
-
-        if((keys.has('shift')) || dashRequest){
-          if(this.dash>=1 && this.dashing<=0){ this.dashing=0.22; this.dash=0; burst(this.x,this.y,'#8fffbe',18,260); beep(220,0.08,'sawtooth'); }
-          dashRequest=false;
-        }
-        if(this.dashing>0) this.dashing-=dt; else this.dashing=0;
-        this.dash = clamp(this.dash + dt*0.5, 0, 1);
-
-        this.fire -= dt;
-        const wantFire = mouse.down || fireHold;
-        if(wantFire && this.fire<=0){
-          fireWeapon();
-        }
-      }
-      hit(dmg=1){
-        if(this.dashing>0) return;
-        this.hp -= dmg; flash('#ff5a77'); burst(this.x,this.y,'#ff93a8',14,220); beep(140,0.05,'triangle');
-        if(this.hp<=0) gameOver();
-      }
-      draw(){ drawPlayer(this.x,this.y,this.r, state.time*6); }
-    }
-
-    class Enemy extends Entity{
-      constructor(x,y,spd,hp=1){ super(x,y,11); this.spd=spd; this.hp=hp; }
-      update(dt){
-        const a=angTo(this.x,this.y,player.x,player.y);
-        this.vx=Math.cos(a)*this.spd; this.vy=Math.sin(a)*this.spd;
-        this.x+=this.vx*dt; this.y+=this.vy*dt;
-        if(circleHit(this, player)){ player.hit(1); this.dead=true; burst(this.x,this.y,'#ff93a8',10,200); }
-      }
-      damage(d){ this.hp-=d; if(this.hp<=0){ this.dead=true; addScore(10); burst(this.x,this.y,'#ff93a8',16,240); beep(420,0.05,'square'); } }
-      draw(){ drawSkinnedEnemy(this.x,this.y,this.r, state.time*7); }
-    }
-
-    class Boss extends Entity{
-      constructor(x,y,hp,spd){ super(x,y,24); this.maxhp=hp; this.hp=hp; this.spd=spd; this.cd=0; }
-      update(dt){
-        const a=angTo(this.x,this.y,player.x,player.y);
-        this.x+=Math.cos(a)*this.spd*dt; this.y+=Math.sin(a)*this.spd*dt;
-        if(circleHit(this, player)){ player.hit(2); }
-        this.cd -= dt;
-        if(this.cd<=0){ this.cd = rand(1.0,1.6)/state.diff; bossBurst(this.x,this.y); beep(260,0.06,'sawtooth'); }
-      }
-      damage(d){ this.hp-=d; if(this.hp<=0){ this.dead=true; addScore(250); onBossDead(); burst(this.x,this.y,'#ffd28f',30,300); beep(160,0.2,'square'); } }
-      draw(){ drawSkinnedBoss(this.x,this.y,this.r, this.hp/this.maxhp); }
-    }
-
-    class Bullet extends Entity{
-      constructor(x,y,a,speed,ally=true, dmg=1, life=2.2){ super(x,y,4); this.vx=Math.cos(a)*speed; this.vy=Math.sin(a)*speed; this.ally=ally; this.dmg=dmg; this.life=life; this.trail=[]; this.color=ally?'#8fffbe':'#ff5a77'; this.pierce=0; }
-      update(dt){
-        this.life-=dt; if(this.life<=0) this.dead=true;
-        this.x+=this.vx*dt; this.y+=this.vy*dt;
-        if(this.x<-30||this.y<-30||this.x>state.w+30||this.y>state.h+30) this.dead=true;
-        // trail
-        this.trail.push({x:this.x,y:this.y,life:0.25});
-        if(this.trail.length>12) this.trail.shift();
-        for(const t of this.trail) t.life-=dt;
-      }
-      draw(){
-        // trail
-        ctx.lineWidth=2;
-        ctx.strokeStyle=this.color+'aa';
-        ctx.beginPath();
-        for(let i=0;i<this.trail.length;i++){
-          const t=this.trail[i];
-          if(i===0) ctx.moveTo(t.x,t.y); else ctx.lineTo(t.x,t.y);
-        }
-        ctx.stroke();
-        // core bullet
-        ctx.fillStyle=this.color; ctx.beginPath(); ctx.arc(this.x,this.y, this.ally?3.5:3, 0, Math.PI*2); ctx.fill();
-      }
-    }
-
-    // Laser (instant ray)
-    function fireLaser(){
-      const a = angTo(player.x,player.y,mouse.x,mouse.y);
-      const dist=1200;
-      const endX = player.x + Math.cos(a)*dist;
-      const endY = player.y + Math.sin(a)*dist;
-      // hit scan
-      let hitAny=false;
-      for(const e of enemies){ if(lineCircle(player.x,player.y,endX,endY,e.x,e.y,e.r)){ e.damage(2); hitAny=true; } }
-      if(boss && !boss.dead && lineCircle(player.x,player.y,endX,endY,boss.x,boss.y,boss.r)){ boss.damage(2); hitAny=true; }
-      // draw beam
-      ctx.save();
-      ctx.globalCompositeOperation='lighter';
-      ctx.strokeStyle='#9df8ff'; ctx.lineWidth=4;
-      ctx.beginPath(); ctx.moveTo(player.x,player.y); ctx.lineTo(endX,endY); ctx.stroke();
-      ctx.strokeStyle='#2de8ff77'; ctx.lineWidth=10; ctx.stroke();
-      ctx.restore();
-      burst(player.x,player.y,'#9df8ff',10,260);
-      beep(900,0.06,'sawtooth');
-      if(hitAny) beep(500,0.05,'square');
-    }
-
-    // State
-    const state = { w:0, h:0, over:false, score:0, wave:1, diff:1.0, spawn:0, inBoss:false, time:0 };
-    let player, enemies=[], bullets=[], boss=null, dashRequest=false;
-
-    const weapon = {
-      kind:'pistol',
-      unlocked: { pistol:true, shotgun:false, laser:false }
-    };
-
-    function setup(){
-      resize();
-      state.w = canvas.getBoundingClientRect().width;
-      state.h = canvas.getBoundingClientRect().height;
-      state.over=false; state.score=0; state.wave=1; state.diff=1.0; state.inBoss=false; state.time=0;
-      enemies.length=0; bullets.length=0; boss=null;
-      player = new Player(state.w/2, state.h/2);
-      weapon.kind='pistol'; weapon.unlocked.shotgun=false; weapon.unlocked.laser=false;
-      ui.status.textContent='Survive'; ui.score.textContent='0'; ui.wave.textContent='1'; ui.diff.textContent='1.0x'; ui.weapon.textContent='Pistol';
-      fireHold=false; dashRequest=false;
-    }
-
-    function addScore(s){ state.score+=s; ui.score.textContent = state.score|0;
-      // unlocks
-      if(state.score>=100 && !weapon.unlocked.shotgun){ weapon.unlocked.shotgun=true; ui.weapon.textContent='Shotgun Unlocked'; beep(600,0.1,'triangle'); burst(player.x,player.y,'#8fffbe',24,300); }
-      if(state.score>=250 && !weapon.unlocked.laser){ weapon.unlocked.laser=true; ui.weapon.textContent='Laser Unlocked'; beep(800,0.1,'triangle'); burst(player.x,player.y,'#9df8ff',24,300); }
-    }
-
-    function circleHit(a,b){ const dx=a.x-b.x, dy=a.y-b.y; return Math.hypot(dx,dy) < a.r + b.r; }
-
-    function shoot(x,y,a,spd,dmg=1){ bullets.push(new Bullet(x,y,a,spd,true,dmg)); }
-
-    function bossBurst(x,y){
-      const n=10;
-      for(let i=0;i<n;i++){ const ang=i*(Math.PI*2/n)+state.time*0.5; bullets.push(new Bullet(x,y,ang, 220*state.diff, false)); }
-    }
-
-    function spawnEnemy(dt){
-      state.spawn -= dt;
-      if(state.spawn>0 || state.inBoss) return;
-      const edge = Math.floor(rand(0,4));
-      let x=0,y=0;
-      if(edge===0){ x=-20; y=rand(0,state.h); }
-      if(edge===1){ x=state.w+20; y=rand(0,state.h); }
-      if(edge===2){ x=rand(0,state.w); y=-20; }
-      if(edge===3){ x=rand(0,state.w); y=state.h+20; }
-      const spd = rand(60,95) * state.diff;
-      enemies.push(new Enemy(x,y,spd,1));
-      state.spawn = clamp(0.9/state.diff, 0.2, 1.7);
-    }
-
-    let waveTimer=0, needBoss=false;
-    function update(dt){
-      if(state.over) return;
-      state.time += dt;
-      waveTimer += dt;
-
-      if(!state.inBoss && (waveTimer>22 || state.score >= state.wave*120)){ needBoss=true; }
-      if(needBoss && !state.inBoss){
-        state.inBoss=true; needBoss=false; waveTimer=0;
-        boss = new Boss(state.w/2, -50, Math.round(120+80*state.diff), 70*state.diff);
-        ui.status.textContent='Boss!';
-      }
-
-      player.update(dt);
-      enemies.forEach(e=>e.update(dt));
-      enemies = enemies.filter(e=>!e.dead);
-      bullets.forEach(b=>b.update(dt));
-
-      // collisions bullets -> enemies/boss
-      for(const b of bullets){
-        if(!b.ally){ if(circleHit(b,player)){ player.hit(1); b.dead=true; } continue; }
-        // ally bullets
-        for(const e of enemies){ if(!b.dead && circleHit(b,e)){ e.damage(b.dmg); if(b.pierce>0){ b.pierce--; } else { b.dead=true; } } }
-        if(boss && !boss.dead && !b.dead && circleHit(b,boss)){ boss.damage(b.dmg); if(b.pierce>0){ b.pierce--; } else { b.dead=true; } }
-      }
-      bullets = bullets.filter(b=>!b.dead);
-
-      if(boss){ boss.update(dt); if(boss.dead){ boss=null; } }
-      if(state.inBoss && !boss){ onBossDead(); }
-
-      spawnEnemy(dt);
-      // particles
-      for(let i=particles.length-1;i>=0;i--){ const p=particles[i]; p.update(dt); if(p.life<=0) particles.splice(i,1); }
-    }
-
-    function onBossDead(){
-      state.inBoss=false; state.wave+=1; ui.wave.textContent=state.wave;
-      state.diff = Math.round((state.diff*1.18)*100)/100;
-      ui.diff.textContent = state.diff.toFixed(2)+'x';
-      ui.status.textContent='Survive';
-      flash('#8fffbe');
-    }
-
-    function draw(){
-      ctx.clearRect(0,0,state.w,state.h);
-      // grid bg
-      ctx.strokeStyle = '#1a1f48'; ctx.lineWidth=1;
-      for(let x=0; x<state.w; x+=40){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,state.h); ctx.stroke(); }
-      for(let y=0; y<state.h; y+=40){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(state.w,y); ctx.stroke(); }
-
-      enemies.forEach(e=>e.draw());
-      if(boss) boss.draw();
-      bullets.forEach(b=>b.draw());
-      particles.forEach(p=>p.draw());
-      player.draw();
-
-      // HP hearts
-      const hearts = Math.max(0, player.hp);
-      ctx.fillStyle = '#ff5a77';
-      for(let i=0;i<hearts;i++){ ctx.beginPath(); ctx.arc(18+i*12, 18, 4.5, 0, Math.PI*2); ctx.fill(); }
-    }
-
-    function flash(color){
-      ctx.save();
-      ctx.fillStyle=color+'33';
-      ctx.fillRect(0,0,state.w,state.h);
-      ctx.restore();
-    }
-
-    function gameOver(){
-      state.over=true; ui.status.textContent='Game Over';
-      beep(110,0.2,'triangle');
-      setTimeout(()=>{
-        ctx.fillStyle='#0009'; ctx.fillRect(0,0,state.w,state.h);
-        ctx.fillStyle='#e6e8ff'; ctx.textAlign='center';
-        ctx.font='bold 28px system-ui, sans-serif';
-        ctx.fillText('GAME OVER', state.w/2, state.h/2-8);
-        ctx.font='14px system-ui, sans-serif';
-        ctx.fillText('Press R to restart', state.w/2, state.h/2+20);
-      },0);
-    }
-
-    function restart(){ setup(); }
-
-    // Weapons
-    function fireWeapon(){
-      if(weapon.kind==='pistol'){
-        player.fire = player.fireRate;
-        const a = angTo(player.x,player.y,mouse.x,mouse.y);
-        shoot(player.x,player.y,a, 520, 1);
-        burst(player.x,player.y,'#8fffbe',8,220); beep(680,0.04,'square');
-        return;
-      }
-      if(weapon.kind==='shotgun' && weapon.unlocked.shotgun){
-        player.fire = 0.32;
-        const base = angTo(player.x,player.y,mouse.x,mouse.y);
-        const pellets=6;
-        for(let i=0;i<pellets;i++){
-          const a = base + rand(-0.18, 0.18);
-          const b = new Bullet(player.x,player.y,a, 520, true, 1);
-          b.life=0.45; b.r=3.5;
-          bullets.push(b);
-        }
-        burst(player.x,player.y,'#c5ff8f',12,260); beep(520,0.06,'square');
-        return;
-      }
-      if(weapon.kind==='laser' && weapon.unlocked.laser){
-        player.fire = 0.5;
-        fireLaser();
-        return;
-      }
-    }
-
-    // Geometry helper
-    function lineCircle(x1,y1,x2,y2,cx,cy,cr){
-      // from line-segment distance formula
-      const dx=x2-x1, dy=y2-y1;
-      const l2 = dx*dx + dy*dy;
-      let t = ((cx-x1)*dx + (cy-y1)*dy)/l2;
-      t = Math.max(0, Math.min(1, t));
-      const px = x1 + t*dx, py = y1 + t*dy;
-      const dist = Math.hypot(px-cx, py-cy);
-      return dist <= cr;
-    }
-
-    // Main loop
-    let last=0;
-    function loop(ts){
-      if(!last) last=ts;
-      const dt = Math.min(0.033, (ts-last)/1000); last=ts;
-      update(dt); draw();
-      requestAnimationFrame(loop);
-    }
-
-    // init
-    setup(); requestAnimationFrame(loop);
-    ui.restart.addEventListener('click', restart);
-
-    // Expose for touch dash
-    window.addEventListener('touchstart', e=>{ if(e.target===btnB) dashRequest=true; }, {passive:true});
-
-  })();
-  </script>
+  let last=0; function loop(t){const dt=(t-last)/1000; last=t; if(!state.over){update(dt);} draw(); requestAnimationFrame(loop);} requestAnimationFrame(loop);
+})();
+</script>
 </body>
 </html>
