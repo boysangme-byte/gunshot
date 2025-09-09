@@ -25,7 +25,7 @@
 </head>
 <body>
   <div class="stage">
-    <div class="title">🎮 악령사냥 <small style="opacity:.7;font-weight:600;">v5</small></div>
+    <div class="title">🎮 악령사냥 <small style="opacity:.7;font-weight:600;">v7</small></div>
     <canvas id="game"></canvas>
 
     <!-- Game Over Overlay -->
@@ -45,7 +45,7 @@
       <div>난이도: <span id="diff">1.00x</span></div>
       <div>상태: <span id="status">Survive</span></div>
     </div>
-    <div class="controls">WASD 이동 · 마우스 조준/클릭 발사 · Shift 대시 · <b>무기 숫자 1/2/3 전환</b> (100점: 샷건, 250점: 레이저 해금)</div>
+    <div class="controls">WASD 이동 · 마우스 조준/클릭 발사 · Shift 대시 · <b>무기 1/2/3 전환</b> (100점: 샷건, 250점: 레이저 해금)</div>
   </div>
 
 <script>
@@ -60,7 +60,8 @@
 
   // Load images
   const imgPlayer=new Image(); imgPlayer.src="player.png";
-  const imgEnemy=new Image(); imgEnemy.src="enemy.png";
+  const imgChaser=new Image(); imgChaser.src="enemy.png";   // 근접형
+  const imgShooter=new Image(); imgShooter.src="Shooter.png"; // 사격형 전용
   const imgBoss=new Image(); imgBoss.src="boss.png";
   const imgHeal=new Image(); imgHeal.src="heal.png";
 
@@ -88,49 +89,84 @@
   let player={x:400,y:260,r:22,speed:230,fireCd:0,dash:0};
   const bullets=[], enemies=[], heals=[];
   const lasers=[]; // visible laser beams
-  const enemyBullets=[]; // boss bullets
+  const enemyBullets=[]; // boss & shooter bullets
 
   const weapon = {
     kind:'pistol',
     unlocked:{ pistol:true, shotgun:false, laser:false }
   };
 
-  // entities
-  class Enemy{
-    constructor(x,y){ this.x=x; this.y=y; this.r=20; this.baseSpd=70; this.hp=3; this.dead=false; }
+  // Base classes
+  class EnemyBase{
+    constructor(x,y){ this.x=x; this.y=y; this.r=20; this.hp=3; this.dead=false; this.baseSpd=70; }
+    aimAngleToPlayer(){ return Math.atan2(player.y-this.y, player.x-this.x); }
+  }
+  class EnemyChaser extends EnemyBase{
     update(dt){
       const spd=this.baseSpd*state.diff;
-      const a=Math.atan2(player.y-this.y, player.x-this.x);
-      this.x += Math.cos(a)*spd*dt;
-      this.y += Math.sin(a)*spd*dt;
+      const a=this.aimAngleToPlayer();
+      this.x += Math.cos(a)*spd*dt; this.y += Math.sin(a)*spd*dt;
       if(!state.over && state.invuln<=0 && dist(this, player) < this.r + player.r){ hitPlayer(); this.dead=true; }
     }
-    draw(){ ctx.drawImage(imgEnemy, this.x-this.r, this.y-this.r, this.r*2, this.r*2); }
+    draw(){ ctx.drawImage(imgChaser, this.x-this.r, this.y-this.r, this.r*2, this.r*2); }
   }
+  class EnemyShooter extends EnemyBase{
+    constructor(x,y){
+      super(x,y);
+      this.baseSpd=80; this.hp=2;
+      this.moveT=1.1; this.stopT=0.8; this.timer=this.moveT; this.stopped=false;
+      this.fireCd=0;
+    }
+    update(dt){
+      this.timer -= dt;
+      if(!this.stopped){
+        const spd=this.baseSpd*state.diff;
+        const a=this.aimAngleToPlayer();
+        this.x += Math.cos(a)*spd*dt; this.y += Math.sin(a)*spd*dt;
+        if(this.timer<=0){ this.stopped=true; this.timer=this.stopT/Math.min(state.diff,2); }
+      }else{
+        this.fireCd -= dt;
+        if(this.fireCd<=0){
+          const base=this.aimAngleToPlayer();
+          const spread = 0.10 + Math.min(0.12, (state.diff-1)*0.04);
+          enemyBullets.push(new EnemyBullet(this.x,this.y, base-spread, 230*state.diff));
+          enemyBullets.push(new EnemyBullet(this.x,this.y, base+spread, 230*state.diff));
+          this.fireCd = 0.35/Math.min(state.diff,2.5);
+        }
+        if(this.timer<=0){ this.stopped=false; this.timer=this.moveT; }
+      }
+      if(!state.over && state.invuln<=0 && dist(this, player) < this.r + player.r){ hitPlayer(); this.dead=true; }
+    }
+    draw(){
+      ctx.drawImage(imgShooter, this.x-this.r, this.y-this.r, this.r*2, this.r*2);
+      if(this.stopped){
+        ctx.save(); ctx.strokeStyle="#b83bff"; ctx.globalAlpha=0.85; ctx.lineWidth=2;
+        ctx.beginPath(); ctx.arc(this.x,this.y,this.r+4,0,Math.PI*2); ctx.stroke(); ctx.restore();
+      }
+    }
+  }
+
   class Boss{
     constructor(){
       this.x=canvas.width/2; this.y=90; this.r=46;
       this.baseHp=140; this.hp=Math.round(this.baseHp*state.diff); this.dead=false;
-      this.shootCD=0.9/Math.min(state.diff,2.2); // faster at higher diff (cap)
+      this.shootCD=0.9/Math.min(state.diff,2.2);
       this._timer=0;
     }
     update(dt){
-      const spd=55*state.diff; // move a bit faster than v4
+      const spd=55*state.diff;
       const a=Math.atan2(player.y-this.y, player.x-this.x);
       this.x += Math.cos(a)*spd*dt; this.y += Math.sin(a)*spd*dt;
       if(!state.over && dist(this, player) < this.r + player.r){ hitPlayer(2); }
-      // shooting patterns
       this._timer -= dt;
       if(this._timer<=0){
         this._timer = this.shootCD;
         if(Math.random()<0.5){
-          // aimed triple shot
           const base = Math.atan2(player.y-this.y, player.x-this.x);
           for(let i=-1;i<=1;i++){
             enemyBullets.push(new EnemyBullet(this.x,this.y, base + i*0.12, 220*state.diff));
           }
         } else {
-          // radial burst
           const n = 8 + Math.floor(state.diff*2);
           for(let i=0;i<n;i++){
             enemyBullets.push(new EnemyBullet(this.x,this.y, i*(Math.PI*2/n), 180*state.diff));
@@ -140,10 +176,24 @@
     }
     draw(){ ctx.drawImage(imgBoss, this.x-this.r, this.y-this.r, this.r*2, this.r*2); }
   }
+
+  // Player bullets with optional max distance (for shotgun)
   class Bullet{
-    constructor(x,y,a,speed,dmg=1){ this.x=x; this.y=y; this.r=4; this.vx=Math.cos(a)*speed; this.vy=Math.sin(a)*speed; this.dmg=dmg; this.dead=false; }
-    update(dt){ this.x+=this.vx*dt; this.y+=this.vy*dt; if(this.x<0||this.y<0||this.x>canvas.width||this.y>canvas.height) this.dead=true; }
-    draw(){ ctx.fillStyle="#73ffdf"; ctx.beginPath(); ctx.arc(this.x,this.y,this.r,0,Math.PI*2); ctx.fill(); }
+    constructor(x,y,a,speed,dmg=1,maxDist=Infinity){
+      this.x=x; this.y=y; this.r=4;
+      this.vx=Math.cos(a)*speed; this.vy=Math.sin(a)*speed;
+      this.dmg=dmg; this.dead=false; this.maxDist=maxDist; this.travel=0;
+    }
+    update(dt){
+      const dx=this.vx*dt, dy=this.vy*dt;
+      this.x += dx; this.y += dy;
+      this.travel += Math.hypot(dx,dy);
+      if(this.x<0||this.y<0||this.x>canvas.width||this.y>canvas.height) this.dead=true;
+      if(this.travel >= this.maxDist) this.dead=true;
+    }
+    draw(){
+      ctx.fillStyle="#73ffdf"; ctx.beginPath(); ctx.arc(this.x,this.y,this.r,0,Math.PI*2); ctx.fill();
+    }
   }
   class EnemyBullet{
     constructor(x,y,a,speed){ this.x=x; this.y=y; this.r=4; this.vx=Math.cos(a)*speed; this.vy=Math.sin(a)*speed; this.dead=false; }
@@ -187,13 +237,14 @@
 
   // game core
   function spawnEnemyEdge(){
+    const makeShooter = Math.random() < Math.min(0.15 + (state.diff-1)*0.15, 0.6);
     const edge=Math.floor(Math.random()*4);
     let x=0,y=0;
     if(edge===0){ x=-20; y=Math.random()*canvas.height; }
     if(edge===1){ x=canvas.width+20; y=Math.random()*canvas.height; }
     if(edge===2){ x=Math.random()*canvas.width; y=-20; }
     if(edge===3){ x=Math.random()*canvas.width; y=canvas.height+20; }
-    const e=new Enemy(x,y);
+    const e = makeShooter ? new EnemyShooter(x,y) : new EnemyChaser(x,y);
     if(dist(e,player) > 160) enemies.push(e);
   }
 
@@ -214,7 +265,8 @@
       const base = Math.atan2(mouse.y-player.y, mouse.x-player.x);
       for(let i=0;i<6;i++){
         const a = base + (Math.random()-0.5)*0.35;
-        bullets.push(new Bullet(player.x,player.y,a,520,1));
+        // Shotgun pellets: short range (maxDist ~ 260px)
+        bullets.push(new Bullet(player.x,player.y,a,520,1,260));
       }
       player.fireCd = 0.34;
       return;
@@ -235,8 +287,7 @@
     state.boss.dead = true;
     state.boss = null;
     state.wave += 1;
-    // Stronger difficulty scaling
-    state.diff = Math.round(state.diff*1.28*100)/100; // was 1.18
+    state.diff = Math.round(state.diff*1.28*100)/100;
     ui.diff.textContent = state.diff.toFixed(2)+'x';
     ui.boss.textContent='-';
   }
@@ -250,7 +301,7 @@
     if(state.score>=250) weapon.unlocked.laser = true;
     updateWeaponUI();
 
-    // enemy spawn: scales with difficulty (stronger)
+    // enemy spawn
     const baseSpawn = 0.012 + (state.diff-1)*0.015;
     if(Math.random() < baseSpawn) spawnEnemyEdge();
 
@@ -259,7 +310,7 @@
     lasers.forEach(l=>l.update(dt));
     enemyBullets.forEach(eb=>eb.update(dt));
 
-    // bullet collisions (player bullets)
+    // collisions: player bullets
     for(const b of bullets){
       for(const e of enemies){
         if(!e.dead && !b.dead && dist(e,b) < e.r + b.r){
@@ -272,7 +323,7 @@
         if(state.boss.hp<=0){ onBossDead(); addScore(100); }
       }
     }
-    // boss bullets -> player
+    // enemy/boss bullets -> player
     for(const eb of enemyBullets){
       if(!state.over && dist(eb, player) < eb.r + player.r){ eb.dead=true; hitPlayer(1); }
     }
@@ -286,7 +337,7 @@
     // boss spawn: 500*n score
     if(!state.boss && state.score >= state.wave*500){ state.boss = new Boss(); ui.boss.textContent='등장'; }
 
-    // heals: LOWER frequency
+    // heals
     if(Math.random()<0.0006) heals.push(new Heal(Math.random()*canvas.width, Math.random()*canvas.height));
     for(const h of heals){ if(dist(h,player) < h.r + player.r){ h.dead=true; state.hp=Math.min(MAX_HP, state.hp+1); ui.hp.textContent=state.hp; } }
     for(let i=heals.length-1;i>=0;i--){ if(heals[i].dead) heals.splice(i,1); }
