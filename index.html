@@ -8,12 +8,12 @@
     :root { --bg:#0a0014; --panel:#150b2c; --line:#3a2360; --text:#e9d7ff; --accent:#d080ff; --danger:#ff4fa0; --good:#73ffdf; }
     *{ box-sizing:border-box; }
     body { margin:0; background: radial-gradient(900px 600px at 70% 20%, #1a0038, var(--bg)); color:var(--text);
-           font-family: "Noto Sans KR", system-ui, sans-serif; display:grid; place-items:center; height:100vh; }
+           font-family: "Noto Sans KR", system-ui, sans-serif; display:grid; place-items:center; min-height:100vh; }
     .stage { position:relative; width:100%; max-width:960px; }
     #game { width:100%; aspect-ratio:16/9; border:2px solid var(--line); border-radius:12px; background:#000; display:block; touch-action:none; }
-    .hud { display:flex; gap:12px; margin-top:6px; font-size:14px; }
+    .hud { display:flex; gap:12px; margin-top:6px; font-size:14px; flex-wrap:wrap; }
     .hud div { background:rgba(255,255,255,0.05); border:1px solid var(--line); padding:6px 10px; border-radius:8px; }
-    .title { font-weight:900; font-size:20px; margin-bottom:8px; color:var(--accent); text-shadow:0 0 8px var(--accent); }
+    .title { font-weight:900; font-size:20px; margin:10px 0 8px; color:var(--accent); text-shadow:0 0 8px var(--accent); display:flex; align-items:center; gap:8px; }
     .controls { font-size:13px; opacity:.8; margin-top:4px; }
     /* overlay */
     .overlay { position:absolute; inset:0; display:none; align-items:center; justify-content:center; }
@@ -25,7 +25,7 @@
 </head>
 <body>
   <div class="stage">
-    <div class="title">🎮 악령사냥</div>
+    <div class="title">🎮 악령사냥 <small style="opacity:.7;font-weight:600;">v4</small></div>
     <canvas id="game"></canvas>
 
     <!-- Game Over Overlay -->
@@ -39,25 +39,26 @@
 
     <div class="hud">
       <div>점수: <span id="score">0</span></div>
-      <div>무기: <span id="weapon">Pistol</span></div>
-      <div>체력: <span id="hp">5</span></div>
+      <div>무기: <span id="weapon">Pistol</span> <small id="unlocks" style="opacity:.7"></small></div>
+      <div>체력: <span id="hp">5</span> / <span id="hpmax">5</span></div>
       <div>보스: <span id="boss">-</span></div>
+      <div>난이도: <span id="diff">1.00x</span></div>
       <div>상태: <span id="status">Survive</span></div>
     </div>
-    <div class="controls">WASD 이동 · 마우스 조준/클릭 발사 · Shift 대시 · 무기 1/2/3 전환</div>
+    <div class="controls">WASD 이동 · 마우스 조준/클릭 발사 · Shift 대시 · <b>무기 숫자 1/2/3 전환</b> (100점: 샷건, 250점: 레이저 해금)</div>
   </div>
 
 <script>
 (() => {
   const canvas=document.getElementById("game"), ctx=canvas.getContext("2d");
   const ui={score:document.getElementById("score"), weapon:document.getElementById("weapon"),
-            hp:document.getElementById("hp"), boss:document.getElementById("boss"), status:document.getElementById("status"),
+            hp:document.getElementById("hp"), hpmax:document.getElementById("hpmax"), boss:document.getElementById("boss"), status:document.getElementById("status"),
             overlay:document.getElementById("overlay"), finalScore:document.getElementById("finalScore"),
-            retryBtn:document.getElementById("retryBtn")};
+            retryBtn:document.getElementById("retryBtn"), unlocks:document.getElementById("unlocks"), diff:document.getElementById("diff")};
   function resize(){const r=canvas.getBoundingClientRect(); canvas.width=r.width; canvas.height=r.height;}
   new ResizeObserver(resize).observe(canvas);
 
-  // Load images
+  // Load images (enemy updated)
   const imgPlayer=new Image(); imgPlayer.src="player.png";
   const imgEnemy=new Image(); imgEnemy.src="enemy.png";
   const imgBoss=new Image(); imgBoss.src="boss.png";
@@ -65,58 +66,98 @@
 
   // input
   const keys=new Set(); const mouse={x:0,y:0,down:false};
-  window.addEventListener("keydown",e=>{keys.add(e.key.toLowerCase()); if(e.key==='r' && state.over) restart();});
+  window.addEventListener("keydown",e=>{
+    const k=e.key.toLowerCase();
+    keys.add(k);
+    if(k==='r' && state.over) restart();
+    if(k==='1'){ weapon.kind='pistol'; }
+    if(k==='2' && weapon.unlocked.shotgun){ weapon.kind='shotgun'; }
+    if(k==='3' && weapon.unlocked.laser){ weapon.kind='laser'; }
+    updateWeaponUI();
+  });
   window.addEventListener("keyup",e=>{keys.delete(e.key.toLowerCase());});
   canvas.addEventListener("mousedown",()=>mouse.down=true);
   window.addEventListener("mouseup",()=>mouse.down=false);
   canvas.addEventListener("mousemove",e=>{const r=canvas.getBoundingClientRect(); mouse.x=e.clientX-r.left; mouse.y=e.clientY-r.top;});
 
-  // state
-  const state={score:0, hp:5, weapon:'pistol', wave:1, boss:null, over:false, time:0, laserTimer:0, heals:[], invuln:1.2};
-  let player={x:400,y:260,r:22,speed:230,fireCd:0};
-  const bullets=[], enemies=[];
+  // state (player max HP = 5)
+  const MAX_HP = 5;
+  const state={score:0, hp:MAX_HP, wave:1, boss:null, over:false, time:0, invuln:1.2, diff:1.0};
+  ui.hpmax.textContent = MAX_HP;
+
+  let player={x:400,y:260,r:22,speed:230,fireCd:0,dash:0};
+  const bullets=[], enemies=[], heals=[];
+  const lasers=[]; // visible laser beams
+
+  const weapon = {
+    kind:'pistol',
+    unlocked:{ pistol:true, shotgun:false, laser:false }
+  };
 
   // entities
   class Enemy{
-    constructor(x,y){ this.x=x; this.y=y; this.r=18; this.spd=70; this.hp=2; this.dead=false; }
+    constructor(x,y){ this.x=x; this.y=y; this.r=20; this.baseSpd=70; this.hp=3; this.dead=false; }
     update(dt){
+      const spd=this.baseSpd*state.diff;
       const a=Math.atan2(player.y-this.y, player.x-this.x);
-      this.x += Math.cos(a)*this.spd*dt;
-      this.y += Math.sin(a)*this.spd*dt;
+      this.x += Math.cos(a)*spd*dt;
+      this.y += Math.sin(a)*spd*dt;
       if(!state.over && state.invuln<=0 && dist(this, player) < this.r + player.r){ hitPlayer(); this.dead=true; }
     }
     draw(){ ctx.drawImage(imgEnemy, this.x-this.r, this.y-this.r, this.r*2, this.r*2); }
   }
   class Boss{
-    constructor(){
-      this.x=canvas.width/2; this.y=80; this.r=44; this.hp=120; this.dead=false;
-    }
+    constructor(){ this.x=canvas.width/2; this.y=90; this.r=46; this.baseHp=140; this.hp=Math.round(this.baseHp*state.diff); this.dead=false; }
     update(dt){
+      const spd=45*state.diff;
       const a=Math.atan2(player.y-this.y, player.x-this.x);
-      this.x += Math.cos(a)*45*dt; this.y += Math.sin(a)*45*dt;
+      this.x += Math.cos(a)*spd*dt; this.y += Math.sin(a)*spd*dt;
       if(!state.over && dist(this, player) < this.r + player.r){ hitPlayer(2); }
     }
-    draw(){
-      ctx.drawImage(imgBoss, this.x-this.r, this.y-this.r, this.r*2, this.r*2);
-    }
+    draw(){ ctx.drawImage(imgBoss, this.x-this.r, this.y-this.r, this.r*2, this.r*2); }
   }
   class Bullet{
     constructor(x,y,a,speed,dmg=1){ this.x=x; this.y=y; this.r=4; this.vx=Math.cos(a)*speed; this.vy=Math.sin(a)*speed; this.dmg=dmg; this.dead=false; }
     update(dt){ this.x+=this.vx*dt; this.y+=this.vy*dt; if(this.x<0||this.y<0||this.x>canvas.width||this.y>canvas.height) this.dead=true; }
     draw(){ ctx.fillStyle="#73ffdf"; ctx.beginPath(); ctx.arc(this.x,this.y,this.r,0,Math.PI*2); ctx.fill(); }
   }
-  class Heal{
-    constructor(x,y){ this.x=x; this.y=y; this.r=18; this.dead=false; }
-    draw(){ ctx.drawImage(imgHeal, this.x-this.r, this.y-this.r, this.r*2, this.r*2); }
+  class Heal{ constructor(x,y){ this.x=x; this.y=y; this.r=18; this.dead=false; } draw(){ ctx.drawImage(imgHeal, this.x-this.r, this.y-this.r, this.r*2, this.r*2); } }
+  class LaserBeam{
+    constructor(x,y,angle){ this.x=x; this.y=y; this.a=angle; this.t=0; this.life=0.25; } // visible for 0.25s
+    update(dt){
+      this.t += dt;
+      const endX = this.x + Math.cos(this.a)*1200;
+      const endY = this.y + Math.sin(this.a)*1200;
+      enemies.forEach(e=>{
+        if(lineCircle(this.x,this.y,endX,endY,e.x,e.y,e.r)){ e.hp -= 2; if(e.hp<=0){ e.dead=true; addScore(10); } }
+      });
+      if(state.boss && !state.boss.dead && lineCircle(this.x,this.y,endX,endY,state.boss.x,state.boss.y,state.boss.r)){
+        state.boss.hp -= 2; if(state.boss.hp<=0){ onBossDead(); addScore(100); } // 100 points on boss kill
+      }
+    }
+    draw(){
+      const endX = this.x + Math.cos(this.a)*1200;
+      const endY = this.y + Math.sin(this.a)*1200;
+      ctx.save();
+      ctx.globalCompositeOperation='lighter';
+      ctx.strokeStyle='#d080ff'; ctx.lineWidth=6; ctx.beginPath(); ctx.moveTo(this.x,this.y); ctx.lineTo(endX,endY); ctx.stroke();
+      ctx.strokeStyle='#b83bff66'; ctx.lineWidth=12; ctx.stroke();
+      ctx.restore();
+    }
+    get dead(){ return this.t >= this.life; }
   }
 
   // helpers
   function dist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
   function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+  function lineCircle(x1,y1,x2,y2,cx,cy,cr){
+    const dx=x2-x1, dy=y2-y1, l2=dx*dx+dy*dy;
+    let t=((cx-x1)*dx + (cy-y1)*dy)/l2; t=Math.max(0,Math.min(1,t));
+    const px=x1+t*dx, py=y1+t*dy; return Math.hypot(px-cx, py-cy) <= cr;
+  }
 
-  // core
+  // game core
   function spawnEnemyEdge(){
-    // spawn from edges, not near player
     const edge=Math.floor(Math.random()*4);
     let x=0,y=0;
     if(edge===0){ x=-20; y=Math.random()*canvas.height; }
@@ -124,94 +165,94 @@
     if(edge===2){ x=Math.random()*canvas.width; y=-20; }
     if(edge===3){ x=Math.random()*canvas.width; y=canvas.height+20; }
     const e=new Enemy(x,y);
-    if(dist(e,player) < 180){ return; } // skip too close spawns
-    enemies.push(e);
+    if(dist(e,player) > 160) enemies.push(e);
   }
 
   function hitPlayer(dmg=1){
-    state.hp -= dmg; state.hp = Math.max(0, state.hp);
+    state.hp = Math.max(0, state.hp - dmg);
     ui.hp.textContent = state.hp;
-    state.invuln = 0.6; // brief invulnerability
-    if(state.hp<=0){ gameOver(); }
+    state.invuln = 0.6;
+    if(state.hp<=0) gameOver();
   }
 
   function fire(){
-    if(state.weapon==='pistol'){ spawnBullet(1,520); player.fireCd = 0.18; }
-    else if(state.weapon==='shotgun'){ for(let i=0;i<5;i++){ spawnBullet(1,500, (Math.random()-0.5)*0.28); } player.fireCd=0.32; }
-    else if(state.weapon==='laser'){ state.laserTimer = 0.25; player.fireCd = 0.5; }
-  }
-  function spawnBullet(dmg,speed,spread=0){
-    const a=Math.atan2(mouse.y-player.y, mouse.x-player.x) + spread;
-    bullets.push(new Bullet(player.x, player.y, a, speed, dmg));
-  }
-  function applyLaserDamage(){
-    // hit-scan along the aim
-    const a=Math.atan2(mouse.y-player.y, mouse.x-player.x);
-    const endX = player.x + Math.cos(a)*1200, endY = player.y + Math.sin(a)*1200;
-    enemies.forEach(e=>{
-      if(lineCircle(player.x,player.y,endX,endY,e.x,e.y,e.r)){ e.hp -= 2; if(e.hp<=0) { e.dead=true; addScore(10); } }
-    });
-    if(state.boss && !state.boss.dead && lineCircle(player.x,player.y,endX,endY,state.boss.x,state.boss.y,state.boss.r)){
-      state.boss.hp -= 2; if(state.boss.hp<=0){ state.boss.dead=true; addScore(500); }
+    if(weapon.kind==='pistol'){
+      spawnBullet(1,520);
+      player.fireCd = 0.18;
+      return;
     }
-    // draw beam
-    ctx.save();
-    ctx.globalCompositeOperation='lighter';
-    ctx.strokeStyle='#d080ff'; ctx.lineWidth=6;
-    ctx.beginPath(); ctx.moveTo(player.x,player.y); ctx.lineTo(endX,endY); ctx.stroke();
-    ctx.strokeStyle='#c92bff66'; ctx.lineWidth=12; ctx.stroke();
-    ctx.restore();
+    if(weapon.kind==='shotgun' && weapon.unlocked.shotgun){
+      const base = Math.atan2(mouse.y-player.y, mouse.x-player.x);
+      for(let i=0;i<6;i++){
+        const a = base + (Math.random()-0.5)*0.35;
+        bullets.push(new Bullet(player.x,player.y,a,520,1));
+      }
+      player.fireCd = 0.34;
+      return;
+    }
+    if(weapon.kind==='laser' && weapon.unlocked.laser){
+      const a = Math.atan2(mouse.y-player.y, mouse.x-player.x);
+      lasers.push(new LaserBeam(player.x, player.y, a));
+      player.fireCd = 0.5;
+      return;
+    }
   }
-  function lineCircle(x1,y1,x2,y2,cx,cy,cr){
-    const dx=x2-x1, dy=y2-y1;
-    const l2 = dx*dx + dy*dy;
-    let t = ((cx-x1)*dx + (cy-y1)*dy)/l2;
-    t = Math.max(0, Math.min(1, t));
-    const px = x1 + t*dx, py = y1 + t*dy;
-    return Math.hypot(px-cx, py-cy) <= cr;
-  }
+  function spawnBullet(dmg,speed){ const a=Math.atan2(mouse.y-player.y, mouse.x-player.x); bullets.push(new Bullet(player.x,player.y,a,speed,dmg)); }
 
   function addScore(n){ state.score += n; ui.score.textContent = state.score; }
+
+  function onBossDead(){
+    if(!state.boss) return;
+    state.boss.dead = true;
+    state.boss = null;
+    state.wave += 1;
+    // difficulty scales up
+    state.diff = Math.round(state.diff*1.18*100)/100;
+    ui.diff.textContent = state.diff.toFixed(2)+'x';
+    ui.boss.textContent='-';
+  }
 
   function update(dt){
     if(state.over) return;
     state.time += dt; if(state.invuln>0) state.invuln -= dt;
 
-    // enemy spawn
-    if(Math.random() < 0.02) spawnEnemyEdge();
+    // unlock progression
+    if(state.score>=100) weapon.unlocked.shotgun = true;
+    if(state.score>=250) weapon.unlocked.laser = true;
+    updateWeaponUI();
+
+    // enemy spawn: scales with difficulty
+    if(Math.random() < (0.015 + (state.diff-1)*0.01)) spawnEnemyEdge();
 
     enemies.forEach(e=>e.update(dt));
     bullets.forEach(b=>b.update(dt));
+    lasers.forEach(l=>l.update(dt));
 
     // bullet collisions
     for(const b of bullets){
       for(const e of enemies){
         if(!e.dead && !b.dead && dist(e,b) < e.r + b.r){
-          e.hp -= b.dmg;
-          b.dead = true;
+          e.hp -= b.dmg; b.dead = true;
           if(e.hp<=0){ e.dead=true; addScore(10); }
         }
       }
       if(state.boss && !b.dead && !state.boss.dead && dist(state.boss,b) < state.boss.r + b.r){
         state.boss.hp -= b.dmg; b.dead=true;
-        if(state.boss.hp<=0){ state.boss.dead=true; addScore(500); }
+        if(state.boss.hp<=0){ onBossDead(); addScore(100); } // 100 points on boss kill
       }
     }
-    // clean
-    for(let i=enemies.length-1;i>=0;i--){ if(enemies[i].dead) enemies.splice(i,1); }
+    // cleanup
     for(let i=bullets.length-1;i>=0;i--){ if(bullets[i].dead) bullets.splice(i,1); }
+    for(let i=enemies.length-1;i>=0;i--){ if(enemies[i].dead) enemies.splice(i,1); }
+    for(let i=lasers.length-1;i>=0;i--){ if(lasers[i].dead) lasers.splice(i,1); }
 
-    // boss spawn: 500*n only
-    if(!state.boss && (state.score >= state.wave*500)){ state.boss = new Boss(); ui.boss.textContent = '등장'; }
-
-    if(state.boss){ state.boss.update(dt); if(state.boss.dead){ state.boss=null; state.wave++; ui.boss.textContent='-'; }}
+    // boss spawn: 500*n score
+    if(!state.boss && state.score >= state.wave*500){ state.boss = new Boss(); ui.boss.textContent='등장'; }
 
     // heals
-    if(Math.random()<0.0012) state.heals.push(new Heal(Math.random()*canvas.width, Math.random()*canvas.height));
-    state.heals.forEach(h=>{
-      if(dist(h,player) < h.r + player.r){ h.dead=true; state.hp = Math.min(10, state.hp+1); ui.hp.textContent = state.hp; }
-    });
-    state.heals = state.heals.filter(h=>!h.dead);
+    if(Math.random()<0.0012) heals.push(new Heal(Math.random()*canvas.width, Math.random()*canvas.height));
+    for(const h of heals){ if(dist(h,player) < h.r + player.r){ h.dead=true; state.hp=Math.min(MAX_HP, state.hp+1); ui.hp.textContent=state.hp; } }
+    for(let i=heals.length-1;i>=0;i--){ if(heals[i].dead) heals.splice(i,1); }
 
     // player movement
     let dx=(keys.has('d')?1:0)-(keys.has('a')?1:0);
@@ -225,40 +266,30 @@
     // fire
     player.fireCd -= dt;
     if(mouse.down && player.fireCd<=0){ fire(); }
-    if(state.weapon!=='laser' && state.score>=100) state.weapon='shotgun';
-    if(state.score>=250) state.weapon='laser';
-    ui.weapon.textContent = state.weapon;
 
-    // laser sustain
-    if(state.laserTimer>0){ state.laserTimer -= dt; applyLaserDamage(); }
-
-    // status
     ui.status.textContent = state.over ? 'Game Over' : (state.boss ? 'Boss' : 'Survive');
   }
 
   function draw(){
     ctx.clearRect(0,0,canvas.width,canvas.height);
-
-    // Player & entities
     enemies.forEach(e=>e.draw());
-    if(state.boss && !state.boss.dead) state.boss.draw();
+    if(state.boss) state.boss.draw();
     bullets.forEach(b=>b.draw());
-    state.heals.forEach(h=>h.draw());
+    heals.forEach(h=>h.draw());
+    lasers.forEach(l=>l.draw());
     ctx.drawImage(imgPlayer, player.x-player.r, player.y-player.r, player.r*2, player.r*2);
 
-    // Top HP bars
+    // HP bars
     const pad=14;
-    // Player
-    const pRatio = state.hp/10; // assume max 10
-    ctx.fillStyle='#3f0'; ctx.globalAlpha=0.2; ctx.fillRect(pad, pad, canvas.width-pad*2, 10); ctx.globalAlpha=1;
-    const grad = ctx.createLinearGradient(pad,0, pad+Math.max(0,(canvas.width-pad*2)*pRatio),0);
+    const pRatio = state.hp / MAX_HP;
+    ctx.fillStyle='#0f3a2a'; ctx.globalAlpha=0.35; ctx.fillRect(pad, pad, canvas.width-pad*2, 10); ctx.globalAlpha=1;
+    const grad = ctx.createLinearGradient(pad,0, pad+(canvas.width-pad*2)*pRatio, 0);
     grad.addColorStop(0,'#73ffdf'); grad.addColorStop(1,'#2dffc4');
     ctx.fillStyle=grad; ctx.fillRect(pad, pad, (canvas.width-pad*2)*pRatio, 10);
-    // Boss
     if(state.boss){
-      const bRatio = clamp(state.boss.hp/120,0,1);
-      ctx.fillStyle='#a514ff33'; ctx.fillRect(pad, pad+16, canvas.width-pad*2, 10);
-      const bgrad = ctx.createLinearGradient(pad,0, pad+Math.max(0,(canvas.width-pad*2)*bRatio),0);
+      const bRatio = Math.max(0, Math.min(1, state.boss.hp / Math.round(140*state.diff)));
+      ctx.fillStyle='#3b104f'; ctx.globalAlpha=0.35; ctx.fillRect(pad, pad+16, canvas.width-pad*2, 10); ctx.globalAlpha=1;
+      const bgrad = ctx.createLinearGradient(pad,0, pad+(canvas.width-pad*2)*bRatio, 0);
       bgrad.addColorStop(0,'#d080ff'); bgrad.addColorStop(1,'#b018ff');
       ctx.fillStyle=bgrad; ctx.fillRect(pad, pad+16, (canvas.width-pad*2)*bRatio, 10);
     }
@@ -270,12 +301,22 @@
     ui.finalScore.textContent = '최종 점수: ' + state.score;
   }
   function restart(){
-    state.score=0; state.hp=5; state.weapon='pistol'; state.wave=1; state.boss=null; state.over=false;
-    enemies.length=0; bullets.length=0; state.heals=[]; state.time=0; state.laserTimer=0; state.invuln=1.2;
-    player.x=canvas.width/2; player.y=canvas.height/2; ui.overlay.style.display='none';
-    ui.score.textContent='0'; ui.hp.textContent='5'; ui.boss.textContent='-'; ui.weapon.textContent='Pistol';
+    state.score=0; state.hp=MAX_HP; state.wave=1; state.boss=null; state.over=false; state.time=0; state.invuln=1.2; state.diff=1.0;
+    enemies.length=0; bullets.length=0; heals.length=0; lasers.length=0;
+    player.x=canvas.width/2; player.y=canvas.height/2; player.fireCd=0; weapon.kind='pistol'; weapon.unlocked={pistol:true,shotgun:false,laser:false};
+    ui.overlay.style.display='none'; ui.score.textContent='0'; ui.hp.textContent=String(MAX_HP); ui.weapon.textContent='Pistol'; ui.boss.textContent='-'; ui.diff.textContent='1.00x';
+    updateWeaponUI();
   }
   ui.retryBtn.addEventListener('click', restart);
+
+  function updateWeaponUI(){
+    ui.weapon.textContent = weapon.kind.charAt(0).toUpperCase()+weapon.kind.slice(1);
+    const labels = [];
+    labels.push('1:Pistol');
+    labels.push('2:Shotgun' + (weapon.unlocked.shotgun?'✅':'🔒'));
+    labels.push('3:Laser' + (weapon.unlocked.laser?'✅':'🔒'));
+    ui.unlocks.textContent = ' ('+labels.join(' · ')+')';
+  }
 
   // loop
   let last=0; function loop(t){ const dt = (t-last)/1000; last=t; update(Math.min(dt,0.033)); draw(); requestAnimationFrame(loop); }
