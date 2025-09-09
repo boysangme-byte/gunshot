@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>악령사냥 v11.6</title>
+<title>악령사냥 v11.6 + Help</title>
 <style>
   :root { --bg:#0a0014; --line:#3a2360; --text:#e9d7ff; --accent:#d080ff; --good:#73ffdf; --pink:#ff76d2; }
   *{ box-sizing:border-box }
@@ -32,11 +32,53 @@
   .dashlabel{ position:absolute; left:50%; transform:translateX(-50%); bottom:34px; font-size:12px; color:#d9c8ff; text-shadow:0 0 6px #8f6aff }
   .dashready{ color:#9affc2; text-shadow:0 0 6px #2fff8f }
 
+  /* --- Help panel --- */
+  .help {
+    position:absolute; left:10px; top:64px;
+    width:240px; max-height:72%;
+    padding:10px 12px; overflow:auto;
+    background:#120626cc; color:#e9d7ff;
+    border:1px solid #3a2360; border-radius:10px;
+    box-shadow:0 8px 20px #0007; font-size:13px; line-height:1.45;
+  }
+  .help h3{margin:4px 0 8px; font-size:14px; color:#d8a7ff; text-shadow:0 0 6px #b66bff}
+  .help .tag{display:inline-block; padding:1px 6px; margin:2px 4px 0 0;
+    border-radius:8px; background:#2a1658; border:1px solid #5b3db3; font-size:11px}
+  .help .kbd{display:inline-block; min-width:18px; text-align:center;
+    padding:1px 6px; margin:0 2px; border-radius:6px;
+    background:#1b0d39; border:1px solid #5b3db3; font-weight:700}
+  .help.hide{display:none}
 </style>
 </head>
 <body>
   <div class="stage">
     <div class="title">🎮 악령사냥 <small style="opacity:.7">v11.6</small></div>
+
+    <!-- 항상 보이는 도움말 패널 -->
+    <div id="help" class="help">
+      <h3>🎮 조작 방법</h3>
+      <div><span class="kbd">W</span><span class="kbd">A</span><span class="kbd">S</span><span class="kbd">D</span> 이동</div>
+      <div>마우스 조준 · 클릭 발사</div>
+      <div><span class="kbd">1</span> Pistol · <span class="kbd">2</span> Shotgun · <span class="kbd">3</span> Laser</div>
+      <div><span class="kbd">Shift</span> 대쉬(0.4s 무적) – 하단 바로 쿨타임 확인</div>
+      <hr style="border-color:#3a2360; opacity:.5">
+      <h3>🔫 무기 팁</h3>
+      <div>Shotgun: **짧은 사거리**, 근접시 추가 피해/넉백</div>
+      <div>Laser: 무기 옆 세로 **HEAT 바** 관리</div>
+      <hr style="border-color:#3a2360; opacity:.5">
+      <h3>🧪 아이템</h3>
+      <div><span class="tag">Heal</span> 체력 +1</div>
+      <div><span class="tag">Zoey</span> 1회 공격 무시(보호막)</div>
+      <div><span class="tag">Mira</span> 폭발(반경 240) + 1초 가속</div>
+      <hr style="border-color:#3a2360; opacity:.5">
+      <h3>👹 적/보스</h3>
+      <div>Chaser, Shooter(정지 후 단발), Abby(돌진)</div>
+      <div>Mystery: 왼쪽→화면 내 랜덤 위치 이동→예고 후 범위 공격→퇴장</div>
+      <div>보스: 점수 500 단위마다 등장, 처치 시 난이도 상승</div>
+      <hr style="border-color:#3a2360; opacity:.5">
+      <div>도움말 토글: <span class="kbd">H</span></div>
+    </div>
+
     <canvas id="game"></canvas>
 
     <div class="hud">
@@ -99,6 +141,7 @@
     if(k==='2' && weapon.unlocked.shotgun) weapon.kind='shotgun';
     if(k==='3' && weapon.unlocked.laser) weapon.kind='laser';
     if(k==='shift') tryDash();
+    if(k==='h') document.getElementById('help').classList.toggle('hide'); // Help 토글
     updateWeaponUI();
   });
   addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
@@ -247,8 +290,7 @@
       if(this.state==='charge'){
         ctx.save(); ctx.globalAlpha=.9; ctx.setLineDash([4,5]); ctx.strokeStyle='#b7f4ff'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(this.x,this.y); ctx.lineTo(ex,ey); ctx.stroke(); ctx.restore();
       }else if(this.state==='beam'){
-        ctx.save();
-        ctx.globalCompositeOperation='lighter';
+        ctx.save(); ctx.globalCompositeOperation='lighter';
         ctx.strokeStyle='#b83bff66'; ctx.lineWidth=18; ctx.beginPath(); ctx.moveTo(this.x,this.y); ctx.lineTo(ex,ey); ctx.stroke();
         ctx.strokeStyle='#d080ff'; ctx.lineWidth=10; ctx.stroke();
         ctx.strokeStyle='#eaffff'; ctx.lineWidth=3; ctx.setLineDash([]); ctx.stroke();
@@ -294,8 +336,8 @@
 
   // damage / score / dmg text
   function addScore(n){ state.score+=n; ui.score.textContent=state.score; }
-  function floatDmg(x,y,val){ state.dmgTexts.push({x,y,t:0,txt:`-${val}`}); }
-  function applyDamage(e,amount){ e.hp-=amount; floatDmg(e.x,e.y,amount); if(e.hp<=0){ e.dead=true; addScore(10); } }
+  function floatDmg(x,y,val){ /* 시각만 필요하면 나중에 확장 */ }
+  function applyDamage(e,amount){ e.hp-=amount; if(e.hp<=0){ e.dead=true; addScore(10); } }
 
   function canDamage(){ return !(state.dash.active) && state.invuln<=0 && !state.over; }
   function damagePlayer(n){
@@ -387,7 +429,7 @@
         if(!e.dead && !b.dead && dist(e,b)<e.r+b.r){
           let dmg=b.dmg, dToPlayer=dist(e,player);
           if(b.max===260 && dToPlayer<=100) dmg*=1.5;
-          applyDamage(e,dmg);
+          e.hp-=dmg; if(e.hp<=0){ e.dead=true; addScore(10); }
           if(b.max===260){ const dir=Math.atan2(e.y-player.y,e.x-player.x); const kb=80; e.x+=Math.cos(dir)*kb*0.06; e.y+=Math.sin(dir)*kb*0.06; }
           b.dead=true;
         }
@@ -467,7 +509,7 @@
   function gameOver(){ state.over=true; ui.overlay.style.display='flex'; ui.finalScore.textContent='최종 점수: '+state.score; }
   function restart(){
     state.score=0; state.hp=MAX_HP; state.wave=1; state.boss=null; state.over=false; state.time=0; state.invuln=0;
-    state.diff=1.0; state.shield=null; state.explosions.length=0; state.flashes.length=0; state.dmgTexts.length=0;
+    state.diff=1.0; state.shield=null; state.explosions.length=0; state.flashes.length=0;
     state.haste=0; state.dash={cd:0,t:0,active:false,postDelay:0}; state.nextMystery=350; state.mysteries.length=0;
     enemies.length=0; bullets.length=0; lasers.length=0; enemyBullets.length=0; heals.length=0; items.length=0;
     player.x=canvas.width/2; player.y=canvas.height/2; player.fireCd=0; player.speed=BASE_SPEED;
