@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>악령사냥 v11.1</title>
+  <title>악령사냥 v11.3</title>
   <style>
     :root { --bg:#0a0014; --panel:#150b2c; --line:#3a2360; --text:#e9d7ff; --accent:#d080ff; --good:#73ffdf; --pink:#ff76d2; }
     *{ box-sizing:border-box }
@@ -16,17 +16,17 @@
     .overlay{ position:absolute; inset:0; display:none; align-items:center; justify-content:center }
     .panel{ background:#120626ee; border:1px solid var(--line); border-radius:16px; padding:22px; text-align:center; box-shadow:0 10px 30px #0008 }
     .btn{ background:#2a1658; color:#fff; border:1px solid #5b3db3; padding:10px 16px; border-radius:10px; cursor:pointer }
-    /* heat bar */
-    .heatbar { position:absolute; left:14px; right:14px; bottom:10px; height:8px; border-radius:6px; border:1px solid var(--line); background:#241542; display:none;}
+    /* heat bar – a bit lower */
+    .heatbar { position:absolute; left:14px; right:14px; bottom:4px; height:8px; border-radius:6px; border:1px solid var(--line); background:#241542; display:none;}
     .heatfill { height:100%; border-radius:6px; background:linear-gradient(90deg,#7be7ff,#d080ff,#ff76d2); width:0%; }
-    .heatlabel { position:absolute; bottom:22px; left:14px; font-size:12px; opacity:.8 }
+    .heatlabel { position:absolute; bottom:18px; left:14px; font-size:12px; opacity:.8 }
     .overblink { animation: blink 0.6s linear infinite; }
     @keyframes blink { 50%{ opacity:.35 } }
   </style>
 </head>
 <body>
   <div class="stage">
-    <div class="title">🎮 악령사냥 <small style="opacity:.7">v11.1</small></div>
+    <div class="title">🎮 악령사냥 <small style="opacity:.7">v11.3</small></div>
     <canvas id="game"></canvas>
 
     <div class="hud">
@@ -69,6 +69,7 @@
   const imgZoey=new Image(); imgZoey.src='zoey.png';
   const imgMira=new Image(); imgMira.src='mira.png';
   const imgAbby=new Image(); imgAbby.src='abby.png';
+  const imgBoom=new Image(); imgBoom.src='boom.png';   // 🔸 Mira 폭발 이미지
 
   // input
   const keys=new Set(); const mouse={x:0,y:0,down:false};
@@ -86,12 +87,17 @@
 
   // state
   const MAX_HP=5;
-  const state={score:0,hp:MAX_HP,wave:1,boss:null,over:false,time:0,invuln:0,diff:1.0, shield:null, explosions:[], flashes:[]};
+  const BASE_SPEED=230;
+  const state={
+    score:0,hp:MAX_HP,wave:1,boss:null,over:false,time:0,invuln:0,diff:1.0,
+    shield:null, explosions:[], flashes:[],
+    haste:0 // 🔸 Mira 버프 타이머(초) — 남는 동안 이동속도 x1.6
+  };
   ui.hpmax.textContent=MAX_HP;
 
   const weapon={kind:'pistol',unlocked:{pistol:true,shotgun:false,laser:false}, heat:0, overheated:false};
 
-  let player={x:canvas.width/2,y:canvas.height/2,r:22,speed:230,fireCd:0};
+  let player={x:canvas.width/2,y:canvas.height/2,r:22,speed:BASE_SPEED,fireCd:0};
 
   const enemies=[], enemyBullets=[], bullets=[], lasers=[], heals=[], items=[];
 
@@ -140,10 +146,21 @@
     get dead(){return this.state==='done'}
   }
 
-  // Items
+  // Items + Explosion(boom.png 사용)
   class ZoeyItem{ constructor(x,y){this.x=x;this.y=y;this.r=18;this.dead=false;} draw(){ctx.drawImage(imgZoey,this.x-this.r,this.y-this.r,this.r*2,this.r*2);} }
   class MiraItem{ constructor(x,y){this.x=x;this.y=y;this.r=18;this.dead=false;} draw(){ctx.drawImage(imgMira,this.x-this.r,this.y-this.r,this.r*2,this.r*2);} }
-  class Explosion{ constructor(x,y){this.x=x;this.y=y;this.t=0;this.r=0; this.max=130;} update(dt){this.t+=dt; this.r=Math.min(this.max,this.t*450);} draw(){ctx.save(); ctx.strokeStyle= '#ff98e5'; ctx.globalAlpha=0.8*(1-this.r/this.max); ctx.lineWidth=6; ctx.beginPath(); ctx.arc(this.x,this.y,this.r,0,Math.PI*2); ctx.stroke(); ctx.restore();} get done(){return this.r>=this.max;} }
+  class Explosion{
+    constructor(x,y){ this.x=x; this.y=y; this.t=0; this.duration=0.6; this.done=false; }
+    update(dt){ this.t += dt; if(this.t>=this.duration) this.done=true; }
+    draw(){
+      const p=this.t/this.duration;                 // 0 → 1
+      const size = 220 + p*120;                     // 점점 커짐
+      ctx.save();
+      ctx.globalAlpha = 1 - p;                      // 서서히 사라짐
+      ctx.drawImage(imgBoom, this.x-size/2, this.y-size/2, size, size);
+      ctx.restore();
+    }
+  }
 
   // helpers
   function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
@@ -170,7 +187,6 @@
 
   function maybeSpawnItems(){
     if(Math.random()<0.0006) heals.push(new Heal(Math.random()*canvas.width,Math.random()*canvas.height));
-    // faster spawn rates
     if(state.score>=300 && Math.random()<0.0012) items.push(new ZoeyItem(Math.random()*canvas.width,Math.random()*canvas.height));
     if(state.score>=500 && Math.random()<0.0008) items.push(new MiraItem(Math.random()*canvas.width,Math.random()*canvas.height));
   }
@@ -185,7 +201,7 @@
 
   function onBossDead(){ if(!state.boss) return; state.boss.dead=true; state.boss=null; state.wave+=1; state.diff = Math.round(state.diff*1.28*100)/100; ui.diff.textContent=state.diff.toFixed(2)+'x'; ui.boss.textContent='-'; }
 
-  // fire & weapons
+  // fire & weapons (샷건 강화 유지: 근접 보너스 + 넉백)
   function fire(){
     if(weapon.kind==='pistol'){ spawnBullet(1,520,Infinity); player.fireCd=0.18; return; }
     if(weapon.kind==='shotgun' && weapon.unlocked.shotgun){
@@ -208,6 +224,10 @@
   function update(dt){
     if(state.over) return;
     state.time+=dt; if(state.invuln>0) state.invuln-=dt;
+
+    // Mira 버프 경과: 속도 x1.6
+    state.haste = Math.max(0, state.haste - dt);
+    player.speed = BASE_SPEED * (state.haste>0 ? 1.6 : 1);
 
     if(state.score>=100) weapon.unlocked.shotgun=true;
     if(state.score>=250) weapon.unlocked.laser=true;
@@ -239,15 +259,14 @@
 
     if(state.boss) state.boss.update(dt);
 
-    // bullet collisions + shotgun knockback/close bonus
+    // bullet collisions + 샷건 근접 보너스/넉백
     for(const b of bullets){
       for(const e of enemies){
         if(!e.dead && !b.dead && dist(e,b)<e.r+b.r){
           let dmg = b.dmg;
           const dToPlayer = dist(e, player);
-          if(b.max===260 && dToPlayer<=90) dmg *= 1.5; // close-range bonus (shotgun pellet)
+          if(b.max===260 && dToPlayer<=90) dmg *= 1.5; // close-range bonus
           e.hp -= dmg;
-          // knockback
           if(b.max===260){ const dir=Math.atan2(e.y-player.y,e.x-player.x); const kb=80; e.x += Math.cos(dir)*kb*0.06; e.y += Math.sin(dir)*kb*0.06; }
           b.dead=true;
           if(e.hp<=0){ e.dead=true; addScore(10); }
@@ -259,8 +278,18 @@
     }
     for(const eb of enemyBullets){ if(dist(eb,player)<eb.r+player.r){ eb.dead=true; damagePlayer(1); } }
 
+    // 픽업 처리
     heals.forEach(h=>{ if(dist(h,player)<h.r+player.r){ h.dead=true; state.hp=Math.min(MAX_HP,state.hp+1); ui.hp.textContent=state.hp; }});
-    for(const it of items){ if(dist(it,player)<it.r+player.r){ it.dead=true; if(it instanceof ZoeyItem){ state.shield={angle:0,dist:28}; } else if(it instanceof MiraItem){ const ex=new Explosion(player.x,player.y); state.explosions.push(ex); enemies.forEach(e=>{ if(dist(e,player)<120){ e.dead=true; addScore(10);} }); } } }
+    for(const it of items){
+      if(dist(it,player)<it.r+player.r){
+        it.dead=true;
+        if(it instanceof ZoeyItem){
+          state.shield={angle:0,dist:28};
+        }else if(it instanceof MiraItem){
+          triggerMiraExplosion(player.x,player.y); // 🔸 폭발 + 가속 버프
+        }
+      }
+    }
 
     cleanup(bullets); cleanup(enemies); cleanup(lasers); cleanup(enemyBullets); cleanup(heals); cleanup(items);
     for(let i=state.explosions.length-1;i>=0;i--) if(state.explosions[i].done) state.explosions.splice(i,1);
@@ -279,6 +308,13 @@
     ui.status.textContent = state.over ? 'Game Over' : (state.boss ? 'Boss' : 'Survive');
   }
 
+  // 🔸 Mira 폭발 로직 (반경 200, 보스 피해 없음)
+  function triggerMiraExplosion(x,y){
+    state.explosions.push(new Explosion(x,y));
+    enemies.forEach(e=>{ if(dist({x,y},e) < 200){ e.dead=true; addScore(10); } });
+    state.haste = 1.0; // 1초 가속
+  }
+
   function draw(){
     ctx.clearRect(0,0,canvas.width,canvas.height);
 
@@ -289,6 +325,7 @@
     heals.forEach(h=>h.draw());
     items.forEach(i=>i.draw());
     lasers.forEach(l=>l.draw());
+    state.explosions.forEach(ex=>ex.draw());
 
     // muzzle flash when laser fires
     state.flashes.forEach(f=>{
@@ -301,7 +338,7 @@
     const blink = state.invuln>0 ? (Math.sin(state.time*20)>0?0.45:1) : 1;
     ctx.save(); ctx.globalAlpha=blink; ctx.drawImage(imgPlayer,player.x-player.r,player.y-player.r,player.r*2,player.r*2); ctx.restore();
 
-    // shield orbit
+    // shield orbit (Zoey)
     if(state.shield){ state.shield.angle += 6/60; const sx = player.x + Math.cos(state.shield.angle)*state.shield.dist; const sy = player.y + Math.sin(state.shield.angle)*state.shield.dist; ctx.drawImage(imgZoey, sx-14, sy-14, 28, 28); }
 
     // HP & Boss bars
@@ -315,9 +352,9 @@
 
   function gameOver(){ state.over=true; ui.overlay.style.display='flex'; ui.finalScore.textContent='최종 점수: '+state.score; }
   function restart(){
-    state.score=0; state.hp=MAX_HP; state.wave=1; state.boss=null; state.over=false; state.time=0; state.invuln=0; state.diff=1.0; state.shield=null; state.explosions.length=0; state.flashes.length=0;
+    state.score=0; state.hp=MAX_HP; state.wave=1; state.boss=null; state.over=false; state.time=0; state.invuln=0; state.diff=1.0; state.shield=null; state.explosions.length=0; state.flashes.length=0; state.haste=0;
     enemies.length=0; bullets.length=0; lasers.length=0; enemyBullets.length=0; heals.length=0; items.length=0;
-    player.x=canvas.width/2; player.y=canvas.height/2; player.fireCd=0;
+    player.x=canvas.width/2; player.y=canvas.height/2; player.fireCd=0; player.speed=BASE_SPEED;
     weapon.kind='pistol'; weapon.unlocked={pistol:true,shotgun:false,laser:false}; weapon.heat=0; weapon.overheated=false;
     ui.overlay.style.display='none'; ui.score.textContent='0'; ui.hp.textContent=String(MAX_HP); ui.weapon.textContent='Pistol'; ui.boss.textContent='-'; ui.diff.textContent='1.00x';
     updateWeaponUI(); ui.heatbar.style.display='none'; ui.heatlabel.textContent='';
