@@ -2,40 +2,26 @@
 <html lang="ko">
 <head>
   <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
-  <title>악령사냥</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>악령사냥 v11</title>
   <style>
-    :root { --bg:#0a0014; --panel:#150b2c; --line:#3a2360; --text:#e9d7ff; --accent:#d080ff; --danger:#ff4fa0; --good:#73ffdf; }
-    *{ box-sizing:border-box; }
-    body { margin:0; background: radial-gradient(900px 600px at 70% 20%, #1a0038, var(--bg)); color:var(--text);
-           font-family: "Noto Sans KR", system-ui, sans-serif; display:grid; place-items:center; min-height:100vh; }
-    .stage { position:relative; width:100%; max-width:960px; }
-    #game { width:100%; aspect-ratio:16/9; border:2px solid var(--line); border-radius:12px; background:#000; display:block; touch-action:none; }
-    .hud { display:flex; gap:12px; margin-top:6px; font-size:14px; flex-wrap:wrap; }
-    .hud div { background:rgba(255,255,255,0.05); border:1px solid var(--line); padding:6px 10px; border-radius:8px; }
-    .title { font-weight:900; font-size:20px; margin:10px 0 8px; color:var(--accent); text-shadow:0 0 8px var(--accent); display:flex; align-items:center; gap:8px; }
-    .controls { font-size:13px; opacity:.8; margin-top:4px; }
-    .overlay { position:absolute; inset:0; display:none; align-items:center; justify-content:center; }
-    .panel { background:#120626ee; border:1px solid var(--line); border-radius:16px; padding:22px; text-align:center; box-shadow:0 10px 30px #0008; }
-    .panel h2 { margin:0 0 8px; color:#ffd1ff; text-shadow:0 0 12px #a03cff; }
-    .btn { background:#2a1658; color:#fff; border:1px solid #5b3db3; padding:10px 16px; border-radius:10px; cursor:pointer; }
-    .btn:hover{ filter:brightness(1.08); }
-    .heatbar { position:absolute; left:16px; bottom:12px; right:16px; height:8px; border:1px solid var(--line); border-radius:6px; background:#2a1b44; display:none; }
-    .heatfill { height:100%; border-radius:6px; background:linear-gradient(90deg,#7be7ff,#ff76d2); width:0%; }
+    :root { --bg:#0a0014; --panel:#150b2c; --line:#3a2360; --text:#e9d7ff; --accent:#d080ff; --good:#73ffdf; --pink:#ff76d2; }
+    *{ box-sizing:border-box }
+    body{ margin:0; min-height:100vh; display:grid; place-items:center; background:radial-gradient(950px 650px at 70% 20%,#1a0038,var(--bg)); color:var(--text); font-family:"Noto Sans KR",system-ui,sans-serif }
+    .stage{ position:relative; width:100%; max-width:960px }
+    #game{ width:100%; aspect-ratio:16/9; background:#000; border:2px solid var(--line); border-radius:12px; display:block; touch-action:none }
+    .title{ font-weight:900; font-size:20px; margin:12px 0 8px; color:var(--accent); text-shadow:0 0 8px var(--accent) }
+    .hud{ display:flex; gap:12px; flex-wrap:wrap; font-size:14px }
+    .hud > div{ background:#ffffff0c; border:1px solid var(--line); padding:6px 10px; border-radius:8px }
+    .overlay{ position:absolute; inset:0; display:none; align-items:center; justify-content:center }
+    .panel{ background:#120626ee; border:1px solid var(--line); border-radius:16px; padding:22px; text-align:center; box-shadow:0 10px 30px #0008 }
+    .btn{ background:#2a1658; color:#fff; border:1px solid #5b3db3; padding:10px 16px; border-radius:10px; cursor:pointer }
   </style>
 </head>
 <body>
   <div class="stage">
-    <div class="title">🎮 악령사냥 <small style="opacity:.7;font-weight:600;">v9</small></div>
+    <div class="title">🎮 악령사냥 <small style="opacity:.7">v11</small></div>
     <canvas id="game"></canvas>
-
-    <div id="overlay" class="overlay">
-      <div class="panel">
-        <h2>👻 사망했습니다</h2>
-        <p id="finalScore">최종 점수: 0</p>
-        <button id="retryBtn" class="btn">다시 시작 (R)</button>
-      </div>
-    </div>
 
     <div class="hud">
       <div>점수: <span id="score">0</span></div>
@@ -45,183 +31,401 @@
       <div>난이도: <span id="diff">1.00x</span></div>
       <div>상태: <span id="status">Survive</span></div>
     </div>
-    <div class="controls">WASD 이동 · 마우스 조준/클릭 발사 · 무기 1/2/3 전환 (100점: 샷건, 250점: 레이저)</div>
-    <div id="heatbar" class="heatbar"><div id="heatfill" class="heatfill"></div></div>
+
+    <div id="overlay" class="overlay">
+      <div class="panel">
+        <h2>👻 사망했습니다</h2>
+        <p id="finalScore">최종 점수: 0</p>
+        <button id="retryBtn" class="btn">다시 시작 (R)</button>
+      </div>
+    </div>
   </div>
 
 <script>
 (() => {
-  const canvas=document.getElementById("game"), ctx=canvas.getContext("2d");
-  const ui={score:document.getElementById("score"), weapon:document.getElementById("weapon"),
-            hp:document.getElementById("hp"), hpmax:document.getElementById("hpmax"), boss:document.getElementById("boss"), status:document.getElementById("status"),
-            overlay:document.getElementById("overlay"), finalScore:document.getElementById("finalScore"),
-            retryBtn:document.getElementById("retryBtn"), unlocks:document.getElementById("unlocks"), diff:document.getElementById("diff"),
-            heatbar:document.getElementById("heatbar"), heatfill:document.getElementById("heatfill")};
+  const canvas=document.getElementById('game'), ctx=canvas.getContext('2d');
+  const ui={score:qs('#score'),weapon:qs('#weapon'),hp:qs('#hp'),hpmax:qs('#hpmax'),boss:qs('#boss'),diff:qs('#diff'),status:qs('#status'),
+            overlay:qs('#overlay'),finalScore:qs('#finalScore'),retryBtn:qs('#retryBtn'),unlocks:qs('#unlocks')};
+  function qs(s){return document.querySelector(s)}
   function resize(){const r=canvas.getBoundingClientRect(); canvas.width=r.width; canvas.height=r.height;}
   new ResizeObserver(resize).observe(canvas);
 
-  const imgPlayer=new Image(); imgPlayer.src="player.png";
-  const imgChaser=new Image(); imgChaser.src="enemy.png";
-  const imgShooter=new Image(); imgShooter.src="Shooter.png";
-  const imgBoss=new Image(); imgBoss.src="boss.png";
-  const imgHeal=new Image(); imgHeal.src="heal.png";
+  // images
+  const imgPlayer=new Image(); imgPlayer.src='player.png';
+  const imgChaser=new Image(); imgChaser.src='enemy.png';
+  const imgShooter=new Image(); imgShooter.src='Shooter.png';
+  const imgBoss=new Image(); imgBoss.src='boss.png';
+  const imgHeal=new Image(); imgHeal.src='heal.png';
+  const imgZoey=new Image(); imgZoey.src='zoey.png';
+  const imgMira=new Image(); imgMira.src='mira.png';
+  const imgAbby=new Image(); imgAbby.src='abby.png';
 
+  // input
   const keys=new Set(); const mouse={x:0,y:0,down:false};
-  window.addEventListener("keydown",e=>{const k=e.key.toLowerCase(); keys.add(k); if(k==='r' && state.over) restart();
-    if(k==='1') weapon.kind='pistol'; if(k==='2' && weapon.unlocked.shotgun) weapon.kind='shotgun'; if(k==='3' && weapon.unlocked.laser) weapon.kind='laser'; updateWeaponUI();});
-  window.addEventListener("keyup",e=>{keys.delete(e.key.toLowerCase());});
-  canvas.addEventListener("mousedown",()=>mouse.down=true); window.addEventListener("mouseup",()=>mouse.down=false);
-  canvas.addEventListener("mousemove",e=>{const r=canvas.getBoundingClientRect(); mouse.x=e.clientX-r.left; mouse.y=e.clientY-r.top;});
+  addEventListener('keydown',e=>{const k=e.key.toLowerCase(); keys.add(k); if(k==='r'&&state.over) restart();
+    if(k==='1') weapon.kind='pistol';
+    if(k==='2' && weapon.unlocked.shotgun) weapon.kind='shotgun';
+    if(k==='3' && weapon.unlocked.laser) weapon.kind='laser';
+    updateWeaponUI();
+  });
+  addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
+  canvas.addEventListener('mousedown',ev=>{mouse.down=true; setMouse(ev)});
+  addEventListener('mouseup',()=>mouse.down=false);
+  canvas.addEventListener('mousemove',setMouse);
+  function setMouse(e){const r=canvas.getBoundingClientRect(); mouse.x=e.clientX-r.left; mouse.y=e.clientY-r.top;}
 
+  // state
   const MAX_HP=5;
-  const state={score:0,hp:MAX_HP,wave:1,boss:null,over:false,time:0,invuln:1.2,diff:1.0};
+  const state={score:0,hp:MAX_HP,wave:1,boss:null,over:false,time:0,invuln:0,diff:1.0, shield:null, explosions:[]};
   ui.hpmax.textContent=MAX_HP;
-  let player={x:400,y:260,r:22,speed:230,fireCd:0};
-  const bullets=[], enemies=[], heals=[], lasers=[], enemyBullets=[];
+
   const weapon={kind:'pistol',unlocked:{pistol:true,shotgun:false,laser:false}, heat:0, overheated:false};
 
-  class EnemyBase{constructor(x,y){this.x=x;this.y=y;this.r=20;this.hp=3;this.dead=false;this.baseSpd=70;} aim(){return Math.atan2(player.y-this.y,player.x-this.x);}}
-  class EnemyChaser extends EnemyBase{update(dt){const s=this.baseSpd*state.diff;const a=this.aim();this.x+=Math.cos(a)*s*dt;this.y+=Math.sin(a)*s*dt;if(!state.over&&state.invuln<=0&&dist(this,player)<this.r+player.r){hitPlayer();this.dead=true;}} draw(){ctx.drawImage(imgChaser,this.x-this.r,this.y-this.r,this.r*2,this.r*2);}}
-  class EnemyShooter extends EnemyBase{constructor(x,y){super(x,y);this.baseSpd=80;this.hp=2;this.moveT=1.1;this.stopT=0.8;this.timer=this.moveT;this.stopped=false;this.fireCd=0;} update(dt){this.timer-=dt;if(!this.stopped){const s=this.baseSpd*state.diff;const a=this.aim();this.x+=Math.cos(a)*s*dt;this.y+=Math.sin(a)*s*dt;if(this.timer<=0){this.stopped=true;this.timer=this.stopT/Math.min(state.diff,2);}}else{this.fireCd-=dt;if(this.fireCd<=0){const base=this.aim();const spread=0.10+Math.min(0.12,(state.diff-1)*0.04);enemyBullets.push(new EnemyBullet(this.x,this.y,base-spread,230*state.diff));enemyBullets.push(new EnemyBullet(this.x,this.y,base+spread,230*state.diff));this.fireCd=0.35/Math.min(state.diff,2.5);}if(this.timer<=0){this.stopped=false;this.timer=this.moveT;}}if(!state.over&&state.invuln<=0&&dist(this,player)<this.r+player.r){hitPlayer();this.dead=true;}} draw(){ctx.drawImage(imgShooter,this.x-this.r,this.y-this.r,this.r*2,this.r*2); if(this.stopped){ctx.save();ctx.strokeStyle="#b83bff";ctx.globalAlpha=0.85;ctx.lineWidth=2;ctx.beginPath();ctx.arc(this.x,this.y,this.r+4,0,Math.PI*2);ctx.stroke();ctx.restore();}}}
+  let player={x:canvas.width/2,y:canvas.height/2,r:22,speed:230,fireCd:0};
 
-  class Boss{constructor(){this.x=canvas.width/2;this.y=100;this.r=46;this.baseHp=140;this.hp=Math.round(this.baseHp*state.diff);this.dead=false;this.shootCD=0.9/Math.min(state.diff,2.2);this._timer=0;} update(dt){const s=55*state.diff;const a=Math.atan2(player.y-this.y,player.x-this.x);this.x+=Math.cos(a)*s*dt;this.y+=Math.sin(a)*s*dt;if(!state.over&&dist(this,player)<this.r+player.r){hitPlayer(2);}this._timer-=dt;if(this._timer<=0){this._timer=this.shootCD;if(Math.random()<0.5){const base=Math.atan2(player.y-this.y,player.x-this.x);for(let i=-1;i<=1;i++){enemyBullets.push(new EnemyBullet(this.x,this.y,base+i*0.12,220*state.diff));}}else{const n=8+Math.floor(state.diff*2);for(let i=0;i<n;i++){enemyBullets.push(new EnemyBullet(this.x,this.y,i*(Math.PI*2/n),180*state.diff));}}}} draw(){ctx.drawImage(imgBoss,this.x-this.r,this.y-this.r,this.r*2,this.r*2);}}
+  const enemies=[], enemyBullets=[], bullets=[], lasers=[], heals=[], items=[];
 
-  class Bullet{constructor(x,y,a,speed,dmg=1,maxDist=Infinity){this.x=x;this.y=y;this.r=4;this.vx=Math.cos(a)*speed;this.vy=Math.sin(a)*speed;this.dmg=dmg;this.dead=false;this.maxDist=maxDist;this.travel=0;} update(dt){const dx=this.vx*dt,dy=this.vy*dt;this.x+=dx;this.y+=dy;this.travel+=Math.hypot(dx,dy);if(this.x<0||this.y<0||this.x>canvas.width||this.y>canvas.height) this.dead=true; if(this.travel>=this.maxDist) this.dead=true;} draw(){ctx.fillStyle="#73ffdf";ctx.beginPath();ctx.arc(this.x,this.y,this.r,0,Math.PI*2);ctx.fill();}}
-  class EnemyBullet{constructor(x,y,a,speed){this.x=x;this.y=y;this.r=4;this.vx=Math.cos(a)*speed;this.vy=Math.sin(a)*speed;this.dead=false;} update(dt){this.x+=this.vx*dt;this.y+=this.vy*dt;if(this.x<-10||this.y<-10||this.x>canvas.width+10||this.y>canvas.height+10)this.dead=true;} draw(){ctx.fillStyle="#ff5fb1";ctx.beginPath();ctx.arc(this.x,this.y,this.r,0,Math.PI*2);ctx.fill();}}
-  class Heal{constructor(x,y){this.x=x;this.y=y;this.r=18;this.dead=false;} draw(){ctx.drawImage(imgHeal,this.x-this.r,this.y-this.r,this.r*2,this.r*2);}}
+  // ---------- Enemies ----------
+  class EnemyBase{
+    constructor(x,y){this.x=x;this.y=y;this.r=20;this.hp=3;this.dead=false;this.baseSpd=70;}
+    aim(){return Math.atan2(player.y-this.y,player.x-this.x)}
+  }
+  class EnemyChaser extends EnemyBase{
+    update(dt){
+      const s=this.baseSpd*state.diff, a=this.aim();
+      this.x+=Math.cos(a)*s*dt; this.y+=Math.sin(a)*s*dt;
+      if(state.invuln<=0 && dist(this,player)<this.r+player.r){ damagePlayer(1); this.dead=true; }
+    }
+    draw(){ctx.drawImage(imgChaser,this.x-this.r,this.y-this.r,this.r*2,this.r*2);}
+  }
+  class EnemyShooter extends EnemyBase{
+    constructor(x,y){super(x,y); this.baseSpd=80; this.hp=2; this.moveT=1.1; this.stopT=0.8; this.timer=this.moveT; this.stopped=false; this.fireCd=0;}
+    update(dt){
+      this.timer-=dt;
+      if(!this.stopped){
+        const s=this.baseSpd*state.diff, a=this.aim(); this.x+=Math.cos(a)*s*dt; this.y+=Math.sin(a)*s*dt;
+        if(this.timer<=0){this.stopped=true; this.timer=this.stopT/Math.min(state.diff,2);}
+      }else{
+        this.fireCd-=dt;
+        if(this.fireCd<=0){
+          const base=this.aim(), sp=0.10+Math.min(0.12,(state.diff-1)*0.04);
+          enemyBullets.push(new EnemyBullet(this.x,this.y,base-sp,230*state.diff));
+          enemyBullets.push(new EnemyBullet(this.x,this.y,base+sp,230*state.diff));
+          this.fireCd=0.35/Math.min(state.diff,2.5);
+        }
+        if(this.timer<=0){this.stopped=false; this.timer=this.moveT;}
+      }
+      if(state.invuln<=0 && dist(this,player)<this.r+player.r){ damagePlayer(1); this.dead=true; }
+    }
+    draw(){ctx.drawImage(imgShooter,this.x-this.r,this.y-this.r,this.r*2,this.r*2);
+      if(this.stopped){ctx.save(); ctx.strokeStyle='#b83bff'; ctx.globalAlpha=.8; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(this.x,this.y,this.r+4,0,Math.PI*2); ctx.stroke(); ctx.restore();}
+    }
+  }
+  // NEW: Abby – unpredictable then charge
+  class EnemyAbby extends EnemyBase{
+    constructor(x,y){super(x,y); this.r=22; this.hp=3; this.baseSpd=120; this.mode='wander'; this.dir=Math.random()*Math.PI*2; this.timer=1.2; }
+    update(dt){
+      this.timer-=dt;
+      if(this.mode==='wander'){
+        this.x+=Math.cos(this.dir)*this.baseSpd*dt; this.y+=Math.sin(this.dir)*this.baseSpd*dt;
+        if(this.timer<=0){ this.mode='charge'; this.timer=0.65; this.dir=this.aim(); }
+      }else{ // charge
+        this.x+=Math.cos(this.dir)*300*state.diff*dt; this.y+=Math.sin(this.dir)*300*state.diff*dt;
+        if(this.timer<=0){ this.mode='wander'; this.timer=0.8+Math.random()*0.8; this.dir=Math.random()*Math.PI*2; }
+      }
+      this.bound();
+      if(state.invuln<=0 && dist(this,player)<this.r+player.r){ damagePlayer(1); this.dead=true; }
+    }
+    bound(){ this.x=Math.max(this.r,Math.min(canvas.width-this.r,this.x)); this.y=Math.max(this.r,Math.min(canvas.height-this.r,this.y)); }
+    draw(){ ctx.drawImage(imgAbby,this.x-this.r,this.y-this.r,this.r*2,this.r*2); }
+  }
 
-  // Balanced Laser: charge + short beam + tick dmg + heat system
+  class Boss{
+    constructor(){this.x=canvas.width/2; this.y=100; this.r=46; this.baseHp=140; this.hp=Math.round(this.baseHp*state.diff); this.dead=false; this.shootCD=0.9/Math.min(state.diff,2.2); this._t=0;}
+    update(dt){
+      const s=55*state.diff, a=Math.atan2(player.y-this.y,player.x-this.x);
+      this.x+=Math.cos(a)*s*dt; this.y+=Math.sin(a)*s*dt;
+      if(dist(this,player)<this.r+player.r && state.invuln<=0) damagePlayer(2);
+      this._t-=dt;
+      if(this._t<=0){
+        this._t=this.shootCD;
+        if(Math.random()<.5){
+          const base=Math.atan2(player.y-this.y,player.x-this.x);
+          for(let i=-1;i<=1;i++) enemyBullets.push(new EnemyBullet(this.x,this.y,base+i*0.12,220*state.diff));
+        }else{
+          const n=8+Math.floor(state.diff*2);
+          for(let i=0;i<n;i++) enemyBullets.push(new EnemyBullet(this.x,this.y,i*(Math.PI*2/n),180*state.diff));
+        }
+      }
+    }
+    draw(){ctx.drawImage(imgBoss,this.x-this.r,this.y-this.r,this.r*2,this.r*2);}
+  }
+
+  class Bullet{
+    constructor(x,y,a,spd,dmg=1,maxDist=Infinity){this.x=x;this.y=y;this.r=4;this.vx=Math.cos(a)*spd;this.vy=Math.sin(a)*spd;this.dmg=dmg;this.max=maxDist;this.d=0;this.dead=false;}
+    update(dt){const dx=this.vx*dt,dy=this.vy*dt; this.x+=dx; this.y+=dy; this.d+=Math.hypot(dx,dy); if(this.d>=this.max) this.dead=true; if(this.x<0||this.y<0||this.x>canvas.width||this.y>canvas.height) this.dead=true;}
+    draw(){ctx.fillStyle=varGood(); ctx.beginPath(); ctx.arc(this.x,this.y,this.r,0,Math.PI*2); ctx.fill();}
+  }
+  class EnemyBullet{
+    constructor(x,y,a,spd){this.x=x;this.y=y;this.r=4;this.vx=Math.cos(a)*spd;this.vy=Math.sin(a)*spd;this.dead=false;}
+    update(dt){this.x+=this.vx*dt; this.y+=this.vy*dt; if(this.x<-10||this.y<-10||this.x>canvas.width+10||this.y>canvas.height+10) this.dead=true;}
+    draw(){ctx.fillStyle='#ff5fb1'; ctx.beginPath(); ctx.arc(this.x,this.y,this.r,0,Math.PI*2); ctx.fill();}
+  }
+  class Heal{ constructor(x,y){this.x=x; this.y=y; this.r=18; this.dead=false;} draw(){ctx.drawImage(imgHeal,this.x-this.r,this.y-this.r,this.r*2,this.r*2);} }
+
+  // LASER (v9 기반, 요청: 데미지↑, 쿨타임↓)
   class LaserBeam{
     constructor(x,y,angle){ this.x=x; this.y=y; this.a=angle; this.t=0; this.state='charge'; this.charge=0.35; this.beam=0.18; this.tick=0; }
     update(dt){
-      this.t+=dt;
-      const endX = this.x + Math.cos(this.a)*1200;
-      const endY = this.y + Math.sin(this.a)*1200;
+      this.t+=dt; const ex=this.x+Math.cos(this.a)*1200, ey=this.y+Math.sin(this.a)*1200;
       if(this.state==='charge'){ if(this.t>=this.charge){ this.state='beam'; this.t=0; } }
       else if(this.state==='beam'){
-        // tick damage every 0.05s
         this.tick+=dt;
-        while(this.tick>=0.05){
+        while(this.tick>=0.05){ // 틱 데미지 2로 상향
           this.tick-=0.05;
-          enemies.forEach(e=>{
-            if(lineCircle(this.x,this.y,endX,endY,e.x,e.y,e.r)){ e.hp -= 1; if(e.hp<=0){ e.dead=true; addScore(10); } }
-          });
-          if(state.boss && !state.boss.dead && lineCircle(this.x,this.y,endX,endY,state.boss.x,state.boss.y,state.boss.r)){
-            state.boss.hp -= 1; if(state.boss.hp<=0){ onBossDead(); addScore(100); }
+          enemies.forEach(e=>{ if(lineCircle(this.x,this.y,ex,ey,e.x,e.y,e.r)){ e.hp-=2; if(e.hp<=0){e.dead=true; addScore(10);} }});
+          if(state.boss && !state.boss.dead && lineCircle(this.x,this.y,ex,ey,state.boss.x,state.boss.y,state.boss.r)){
+            state.boss.hp-=2; if(state.boss.hp<=0){ onBossDead(); addScore(100); }
           }
         }
-        if(this.t>=this.beam){ this.state='done'; }
+        if(this.t>=this.beam) this.state='done';
       }
     }
     draw(){
-      const endX = this.x + Math.cos(this.a)*1200;
-      const endY = this.y + Math.sin(this.a)*1200;
+      const ex=this.x+Math.cos(this.a)*1200, ey=this.y+Math.sin(this.a)*1200;
       if(this.state==='charge'){
-        // thin aim line
-        ctx.save(); ctx.globalAlpha=0.7; ctx.setLineDash([6,6]);
-        ctx.strokeStyle='#7be7ff'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(this.x,this.y); ctx.lineTo(endX,endY); ctx.stroke();
-        ctx.restore();
+        ctx.save(); ctx.globalAlpha=.7; ctx.setLineDash([6,6]); ctx.strokeStyle='#7be7ff'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(this.x,this.y); ctx.lineTo(ex,ey); ctx.stroke(); ctx.restore();
       }else if(this.state==='beam'){
-        ctx.save();
-        ctx.globalCompositeOperation='lighter';
-        ctx.strokeStyle='#d080ff'; ctx.lineWidth=6; ctx.beginPath(); ctx.moveTo(this.x,this.y); ctx.lineTo(endX,endY); ctx.stroke();
-        ctx.strokeStyle='#b83bff66'; ctx.lineWidth=12; ctx.stroke();
-        ctx.restore();
+        ctx.save(); ctx.globalCompositeOperation='lighter';
+        ctx.strokeStyle='#d080ff'; ctx.lineWidth=6; ctx.beginPath(); ctx.moveTo(this.x,this.y); ctx.lineTo(ex,ey); ctx.stroke();
+        ctx.strokeStyle='#b83bff66'; ctx.lineWidth=12; ctx.stroke(); ctx.restore();
       }
     }
-    get dead(){ return this.state==='done'; }
+    get dead(){return this.state==='done'}
   }
 
-  function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y);} function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
-  function lineCircle(x1,y1,x2,y2,cx,cy,cr){const dx=x2-x1,dy=y2-y1,l2=dx*dx+dy*dy;let t=((cx-x1)*dx+(cy-y1)*dy)/l2;t=Math.max(0,Math.min(1,t));const px=x1+t*dx,py=y1+t*dy;return Math.hypot(px-cx,py-cy)<=cr;}
+  // Items
+  class ZoeyItem{ constructor(x,y){this.x=x;this.y=y;this.r=18;this.dead=false;} draw(){ctx.drawImage(imgZoey,this.x-this.r,this.y-this.r,this.r*2,this.r*2);} }
+  class MiraItem{ constructor(x,y){this.x=x;this.y=y;this.r=18;this.dead=false;} draw(){ctx.drawImage(imgMira,this.x-this.r,this.y-this.r,this.r*2,this.r*2);} }
+  // explosion visual
+  class Explosion{ constructor(x,y){this.x=x;this.y=y;this.t=0;this.r=0; this.max=130;} update(dt){this.t+=dt; this.r=Math.min(this.max,this.t*450);} draw(){ctx.save(); ctx.strokeStyle= '#ff98e5'; ctx.globalAlpha=0.8*(1-this.r/this.max); ctx.lineWidth=6; ctx.beginPath(); ctx.arc(this.x,this.y,this.r,0,Math.PI*2); ctx.stroke(); ctx.restore();} get done(){return this.r>=this.max;} }
 
-  function spawnEnemyEdge(){const shooter=Math.random()<Math.min(0.15+(state.diff-1)*0.15,0.6);const edge=Math.floor(Math.random()*4);let x=0,y=0;if(edge===0){x=-20;y=Math.random()*canvas.height;}if(edge===1){x=canvas.width+20;y=Math.random()*canvas.height;}if(edge===2){x=Math.random()*canvas.width;y=-20;}if(edge===3){x=Math.random()*canvas.width;y=canvas.height+20;}const e=shooter?new EnemyShooter(x,y):new EnemyChaser(x,y); if(dist(e,player)>160) enemies.push(e);}
+  // helpers
+  function varGood(){return '#73ffdf'}
+  function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
+  function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+  function lineCircle(x1,y1,x2,y2,cx,cy,cr){const dx=x2-x1,dy=y2-y1,l2=dx*dx+dy*dy; let t=((cx-x1)*dx+(cy-y1)*dy)/l2; t=Math.max(0,Math.min(1,t)); const px=x1+t*dx, py=y1+t*dy; return Math.hypot(px-cx,py-cy)<=cr;}
 
-  function hitPlayer(dmg=1){state.hp=Math.max(0,state.hp-dmg);ui.hp.textContent=state.hp;state.invuln=0.4;if(state.hp<=0) gameOver();}
+  // spawns ------------------------------------------------
+  function spawnEnemyEdge(){
+    const edge=Math.floor(Math.random()*4);
+    let x=0,y=0;
+    if(edge===0){x=-20; y=Math.random()*canvas.height}
+    if(edge===1){x=canvas.width+20; y=Math.random()*canvas.height}
+    if(edge===2){x=Math.random()*canvas.width; y=-20}
+    if(edge===3){x=Math.random()*canvas.width; y=canvas.height+20}
+    // pick type
+    let choice='chaser';
+    const pShooter=Math.min(0.15+(state.diff-1)*0.15,0.6);
+    const pAbby = state.score>=500 ? 0.18 : 0.0;
+    const r=Math.random();
+    if(r<pAbby) choice='abby';
+    else if(r<pAbby+pShooter) choice='shooter';
+    const e = choice==='abby' ? new EnemyAbby(x,y) : (choice==='shooter' ? new EnemyShooter(x,y) : new EnemyChaser(x,y));
+    if(dist(e,player)>160) enemies.push(e);
+  }
 
+  function maybeSpawnItems(){
+    // 기본 회복(희소)
+    if(Math.random()<0.0006) heals.push(new Heal(Math.random()*canvas.width,Math.random()*canvas.height));
+    // 2) Zoey: 300점 이후 낮은 확률
+    if(state.score>=300 && Math.random()<0.0005) items.push(new ZoeyItem(Math.random()*canvas.width,Math.random()*canvas.height));
+    // 3) Mira: 500점 이후 더 낮은 확률
+    if(state.score>=500 && Math.random()<0.00035) items.push(new MiraItem(Math.random()*canvas.width,Math.random()*canvas.height));
+  }
+
+  // damage / score ---------------------------------------
+  function addScore(n){ state.score+=n; ui.score.textContent=state.score; }
+  function damagePlayer(n){
+    // 2초 무적 깜빡임 + Zoey 보호 처리
+    if(state.invuln>0) return;
+    if(state.shield){  // Zoey 보호 소모
+      state.shield=null;
+      // 보호 파편 이펙트
+      state.explosions.push(new Explosion(player.x,player.y));
+      return;
+    }
+    state.hp=Math.max(0,state.hp-n);
+    ui.hp.textContent=state.hp;
+    state.invuln=2.0; // 요청: 2초 무적
+    if(state.hp<=0) gameOver();
+  }
+
+  function onBossDead(){
+    if(!state.boss) return;
+    state.boss.dead=true; state.boss=null; state.wave+=1;
+    state.diff = Math.round(state.diff*1.28*100)/100;
+    ui.diff.textContent=state.diff.toFixed(2)+'x';
+    ui.boss.textContent='-';
+  }
+
+  // fire --------------------------------------------------
   function fire(){
     if(weapon.kind==='pistol'){
-      spawnBullet(1,520); player.fireCd=0.18; return;
+      spawnBullet(1,520,Infinity); player.fireCd=0.18; return;
     }
-    if(weapon.kind==='shotgun'&&weapon.unlocked.shotgun){
+    if(weapon.kind==='shotgun' && weapon.unlocked.shotgun){
       const base=Math.atan2(mouse.y-player.y,mouse.x-player.x);
       for(let i=0;i<6;i++){ const a=base+(Math.random()-0.5)*0.35; bullets.push(new Bullet(player.x,player.y,a,520,1,260)); }
       player.fireCd=0.34; return;
     }
-    if(weapon.kind==='laser'&&weapon.unlocked.laser){
+    if(weapon.kind==='laser' && weapon.unlocked.laser){
       if(weapon.overheated || weapon.heat>=100){ weapon.overheated=true; return; }
       const a=Math.atan2(mouse.y-player.y,mouse.x-player.x);
-      lasers.push(new LaserBeam(player.x, player.y, a));
-      weapon.heat = Math.min(100, weapon.heat + 35);
+      lasers.push(new LaserBeam(player.x,player.y,a));
+      weapon.heat=Math.min(100, weapon.heat+35);
       if(weapon.heat>=100) weapon.overheated=true;
-      player.fireCd=0.65; return;
+      player.fireCd=0.55; // 쿨타임 소폭 하락(기존 0.65→0.55)
+      return;
     }
   }
-  function spawnBullet(dmg,speed){ const a=Math.atan2(mouse.y-player.y,mouse.x-player.x); bullets.push(new Bullet(player.x,player.y,a,speed,dmg)); }
-  function addScore(n){ state.score+=n; ui.score.textContent=state.score; }
-  function onBossDead(){ if(!state.boss) return; state.boss.dead=true; state.boss=null; state.wave+=1; state.diff=Math.round(state.diff*1.28*100)/100; ui.diff.textContent=state.diff.toFixed(2)+'x'; ui.boss.textContent='-'; }
+  function spawnBullet(dmg,spd,maxD){ const a=Math.atan2(mouse.y-player.y,mouse.x-player.x); bullets.push(new Bullet(player.x,player.y,a,spd,dmg,maxD)); }
 
+  // main loop --------------------------------------------
   function update(dt){
     if(state.over) return;
     state.time+=dt; if(state.invuln>0) state.invuln-=dt;
-    if(state.score>=100) weapon.unlocked.shotgun=true; if(state.score>=250) weapon.unlocked.laser=true; updateWeaponUI();
 
-    // heat system
-    const coolRate = 22; // per second
-    if(weapon.heat>0){ weapon.heat = Math.max(0, weapon.heat - coolRate*dt); if(weapon.overheated && weapon.heat<=40) weapon.overheated=false; }
-    ui.heatfill.style.width = Math.min(100, weapon.heat).toFixed(0)+'%';
-    ui.heatbar.style.display = (weapon.kind==='laser' && weapon.unlocked.laser)? 'block':'none';
+    // unlocks
+    if(state.score>=100) weapon.unlocked.shotgun=true;
+    if(state.score>=250) weapon.unlocked.laser=true;
+    updateWeaponUI();
 
-    const baseSpawn=0.012+(state.diff-1)*0.015; if(Math.random()<baseSpawn) spawnEnemyEdge();
-    enemies.forEach(e=>e.update(dt)); bullets.forEach(b=>b.update(dt)); lasers.forEach(l=>l.update(dt)); enemyBullets.forEach(eb=>eb.update(dt));
+    // heat cool
+    if(weapon.heat>0){ weapon.heat=Math.max(0, weapon.heat-22*dt); if(weapon.overheated && weapon.heat<=40) weapon.overheated=false; }
+
+    // spawn
+    const spawnRate=0.012+(state.diff-1)*0.015;
+    if(Math.random()<spawnRate) spawnEnemyEdge();
+    maybeSpawnItems();
+
+    enemies.forEach(e=>e.update(dt));
+    bullets.forEach(b=>b.update(dt));
+    lasers.forEach(l=>l.update(dt));
+    enemyBullets.forEach(b=>b.update(dt));
+    state.explosions.forEach(ex=>ex.update(dt));
+
     if(state.boss) state.boss.update(dt);
 
+    // collisions: player bullets
     for(const b of bullets){
-      for(const e of enemies){ if(!e.dead && !b.dead && dist(e,b)<e.r+b.r){ e.hp-=b.dmg; b.dead=true; if(e.hp<=0){e.dead=true; addScore(10);} } }
-      if(state.boss && !b.dead && !state.boss.dead && dist(state.boss,b)<state.boss.r+b.r){ state.boss.hp-=b.dmg; b.dead=true; if(state.boss.hp<=0){ onBossDead(); addScore(100);} }
+      for(const e of enemies){
+        if(!e.dead && !b.dead && dist(e,b)<e.r+b.r){
+          e.hp-=b.dmg; b.dead=true; if(e.hp<=0){ e.dead=true; addScore(10); }
+        }
+      }
+      if(state.boss && !b.dead && !state.boss.dead && dist(state.boss,b)<state.boss.r+b.r){
+        state.boss.hp-=b.dmg; b.dead=true; if(state.boss.hp<=0){ onBossDead(); addScore(100); }
+      }
     }
-    for(const eb of enemyBullets){ if(!state.over && dist(eb,player)<eb.r+player.r){ eb.dead=true; hitPlayer(1);} }
+    // enemy bullets -> player
+    for(const eb of enemyBullets){
+      if(dist(eb,player)<eb.r+player.r){ eb.dead=true; damagePlayer(1); }
+    }
 
-    for(let i=bullets.length-1;i>=0;i--){ if(bullets[i].dead) bullets.splice(i,1); }
-    for(let i=enemies.length-1;i>=0;i--){ if(enemies[i].dead) enemies.splice(i,1); }
-    for(let i=lasers.length-1;i>=0;i--){ if(lasers[i].dead) lasers.splice(i,1); }
-    for(let i=enemyBullets.length-1;i>=0;i--){ if(enemyBullets[i].dead) enemyBullets.splice(i,1); }
+    // pickups
+    heals.forEach(h=>{ if(dist(h,player)<h.r+player.r){ h.dead=true; state.hp=Math.min(MAX_HP,state.hp+1); ui.hp.textContent=state.hp; }});
+    for(const it of items){
+      if(dist(it,player)<it.r+player.r){
+        it.dead=true;
+        if(it instanceof ZoeyItem){
+          // 보호막 1회: 플레이어 주변을 공전
+          state.shield={angle:0,dist:28};
+        }else if(it instanceof MiraItem){
+          // 폭발: 근접 적 제거
+          const ex=new Explosion(player.x,player.y); state.explosions.push(ex);
+          enemies.forEach(e=>{ if(dist(e,player)<120){ e.dead=true; addScore(10);} });
+        }
+      }
+    }
 
+    // cleanup
+    removeDead(bullets); removeDead(enemies); removeDead(lasers); removeDead(enemyBullets); removeDead(heals); removeDead(items);
+    for(let i=state.explosions.length-1;i>=0;i--){ if(state.explosions[i].done) state.explosions.splice(i,1); }
+
+    // boss spawn rule (500*n)
     if(!state.boss && state.score>=state.wave*500){ state.boss=new Boss(); ui.boss.textContent='등장'; }
-    if(Math.random()<0.0006) heals.push(new Heal(Math.random()*canvas.width,Math.random()*canvas.height));
-    for(const h of heals){ if(dist(h,player)<h.r+player.r){ h.dead=true; state.hp=Math.min(MAX_HP,state.hp+1); ui.hp.textContent=state.hp; } }
-    for(let i=heals.length-1;i>=0;i--){ if(heals[i].dead) heals.splice(i,1); }
 
-    let dx=(keys.has('d')?1:0)-(keys.has('a')?1:0), dy=(keys.has('s')?1:0)-(keys.has('w')?1:0);
-    const len=Math.hypot(dx,dy)||1; player.x+=dx/len*player.speed*dt; player.y+=dy/len*player.speed*dt;
+    // movement
+    let dx=(keys.has('d')?1:0)-(keys.has('a')?1:0);
+    let dy=(keys.has('s')?1:0)-(keys.has('w')?1:0);
+    const len=Math.hypot(dx,dy)||1;
+    player.x+=dx/len*player.speed*dt; player.y+=dy/len*player.speed*dt;
     player.x=clamp(player.x,player.r,canvas.width-player.r); player.y=clamp(player.y,player.r,canvas.height-player.r);
+
+    // fire hold
     player.fireCd-=dt; if(mouse.down && player.fireCd<=0) fire();
-    ui.status.textContent= state.over ? 'Game Over' : (state.boss ? 'Boss' : 'Survive');
+
+    ui.status.textContent = state.over ? 'Game Over' : (state.boss ? 'Boss' : 'Survive');
   }
 
   function draw(){
     ctx.clearRect(0,0,canvas.width,canvas.height);
-    enemies.forEach(e=>e.draw()); if(state.boss) state.boss.draw();
-    bullets.forEach(b=>b.draw()); enemyBullets.forEach(eb=>eb.draw()); heals.forEach(h=>h.draw()); lasers.forEach(l=>l.draw());
-    ctx.drawImage(imgPlayer,player.x-player.r,player.y-player.r,player.r*2,player.r*2);
 
-    const pad=14; const pRatio=state.hp/MAX_HP;
-    ctx.fillStyle='#0f3a2a'; ctx.globalAlpha=0.35; ctx.fillRect(pad,pad,canvas.width-pad*2,10); ctx.globalAlpha=1;
-    const grad=ctx.createLinearGradient(pad,0,pad+(canvas.width-pad*2)*pRatio,0); grad.addColorStop(0,'#73ffdf'); grad.addColorStop(1,'#2dffc4'); ctx.fillStyle=grad; ctx.fillRect(pad,pad,(canvas.width-pad*2)*pRatio,10);
-    if(state.boss){ const bRatio=Math.max(0,Math.min(1,state.boss.hp/Math.round(140*state.diff))); ctx.fillStyle='#3b104f'; ctx.globalAlpha=0.35; ctx.fillRect(pad,pad+16,canvas.width-pad*2,10); ctx.globalAlpha=1; const bgrad=ctx.createLinearGradient(pad,0,pad+(canvas.width-pad*2)*bRatio,0); bgrad.addColorStop(0,'#d080ff'); bgrad.addColorStop(1,'#b018ff'); ctx.fillStyle=bgrad; ctx.fillRect(pad,pad+16,(canvas.width-pad*2)*bRatio,10); }
+    // entities
+    enemies.forEach(e=>e.draw());
+    if(state.boss) state.boss.draw();
+    bullets.forEach(b=>b.draw());
+    enemyBullets.forEach(b=>b.draw());
+    heals.forEach(h=>h.draw());
+    items.forEach(i=>i.draw());
+    state.explosions.forEach(ex=>ex.draw());
+
+    // player (blink when invuln)
+    const blink = state.invuln>0 ? (Math.sin(state.time*20)>0?0.45:1) : 1;
+    ctx.save(); ctx.globalAlpha=blink; ctx.drawImage(imgPlayer,player.x-player.r,player.y-player.r,player.r*2,player.r*2); ctx.restore();
+
+    // Zoey 보호막 표시(공전)
+    if(state.shield){
+      state.shield.angle += 6/60;
+      const sx = player.x + Math.cos(state.shield.angle)*state.shield.dist;
+      const sy = player.y + Math.sin(state.shield.angle)*state.shield.dist;
+      ctx.drawImage(imgZoey, sx-14, sy-14, 28, 28);
+    }
+
+    // HP bars
+    const pad=14;
+    const pRatio = state.hp/MAX_HP;
+    ctx.fillStyle='#0f3a2a'; ctx.globalAlpha=.35; ctx.fillRect(pad,pad,canvas.width-pad*2,10); ctx.globalAlpha=1;
+    const grad = ctx.createLinearGradient(pad,0,pad+(canvas.width-pad*2)*pRatio,0); grad.addColorStop(0,'#73ffdf'); grad.addColorStop(1,'#2dffc4');
+    ctx.fillStyle=grad; ctx.fillRect(pad,pad,(canvas.width-pad*2)*pRatio,10);
+    if(state.boss){
+      const bRatio = Math.max(0,Math.min(1, state.boss.hp/Math.round(140*state.diff)));
+      ctx.fillStyle='#3b104f'; ctx.globalAlpha=.35; ctx.fillRect(pad,pad+16,canvas.width-pad*2,10); ctx.globalAlpha=1;
+      const bgrad = ctx.createLinearGradient(pad,0,pad+(canvas.width-pad*2)*bRatio,0); bgrad.addColorStop(0,'#d080ff'); bgrad.addColorStop(1,'#b018ff');
+      ctx.fillStyle=bgrad; ctx.fillRect(pad,pad+16,(canvas.width-pad*2)*bRatio,10);
+    }
   }
 
+  function removeDead(arr){ for(let i=arr.length-1;i>=0;i--) if(arr[i].dead) arr.splice(i,1) }
+
   function gameOver(){ state.over=true; ui.overlay.style.display='flex'; ui.finalScore.textContent='최종 점수: '+state.score; }
-  function restart(){ state.score=0; state.hp=MAX_HP; state.wave=1; state.boss=null; state.over=false; state.time=0; state.invuln=1.2; state.diff=1.0;
-    enemies.length=0; bullets.length=0; heals.length=0; lasers.length=0; enemyBullets.length=0; weapon.heat=0; weapon.overheated=false;
-    player.x=canvas.width/2; player.y=canvas.height/2; player.fireCd=0; weapon.kind='pistol'; weapon.unlocked={pistol:true,shotgun:false,laser:false};
-    ui.overlay.style.display='none'; ui.score.textContent='0'; ui.hp.textContent=String(MAX_HP); ui.weapon.textContent='Pistol'; ui.boss.textContent='-'; ui.diff.textContent='1.00x'; updateWeaponUI(); ui.heatfill.style.width='0%'; }
-  ui.retryBtn.addEventListener('click', restart);
+  function restart(){
+    state.score=0; state.hp=MAX_HP; state.wave=1; state.boss=null; state.over=false; state.time=0; state.invuln=0; state.diff=1.0; state.shield=null; state.explosions.length=0;
+    enemies.length=0; bullets.length=0; lasers.length=0; enemyBullets.length=0; heals.length=0; items.length=0;
+    player.x=canvas.width/2; player.y=canvas.height/2; player.fireCd=0;
+    weapon.kind='pistol'; weapon.unlocked={pistol:true,shotgun:false,laser:false}; weapon.heat=0; weapon.overheated=false;
+    ui.overlay.style.display='none'; ui.score.textContent='0'; ui.hp.textContent=String(MAX_HP); ui.weapon.textContent='Pistol'; ui.boss.textContent='-'; ui.diff.textContent='1.00x';
+    updateWeaponUI();
+  }
+  ui.retryBtn.addEventListener('click',restart);
 
-  function updateWeaponUI(){ ui.weapon.textContent=weapon.kind.charAt(0).toUpperCase()+weapon.kind.slice(1);
-    const labels=['1:Pistol','2:Shotgun'+(weapon.unlocked.shotgun?'✅':'🔒'),'3:Laser'+(weapon.unlocked.laser?'✅':'🔒')]; ui.unlocks.textContent=' ('+labels.join(' · ')+')'; }
+  function updateWeaponUI(){
+    ui.weapon.textContent = weapon.kind[0].toUpperCase()+weapon.kind.slice(1);
+    ui.unlocks.textContent = ` (1:Pistol · 2:Shotgun${weapon.unlocked.shotgun?'✅':'🔒'} · 3:Laser${weapon.unlocked.laser?'✅':'🔒'})`;
+  }
 
-  let last=0; function loop(t){const dt=(t-last)/1000; last=t; update(Math.min(dt,0.033)); draw(); requestAnimationFrame(loop);} requestAnimationFrame(loop);
+  let last=0; function loop(t){const dt=(t-last)/1000; last=t; update(Math.min(dt,0.033)); draw(); requestAnimationFrame(loop)} requestAnimationFrame(loop);
 })();
 </script>
 </body>
