@@ -1,32 +1,38 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>악령사냥 v11.3</title>
-  <style>
-    :root { --bg:#0a0014; --panel:#150b2c; --line:#3a2360; --text:#e9d7ff; --accent:#d080ff; --good:#73ffdf; --pink:#ff76d2; }
-    *{ box-sizing:border-box }
-    body{ margin:0; min-height:100vh; display:grid; place-items:center; background:radial-gradient(950px 650px at 70% 20%,#1a0038,var(--bg)); color:var(--text); font-family:"Noto Sans KR",system-ui,sans-serif }
-    .stage{ position:relative; width:100%; max-width:960px }
-    #game{ width:100%; aspect-ratio:16/9; background:#000; border:2px solid var(--line); border-radius:12px; display:block; touch-action:none }
-    .title{ font-weight:900; font-size:20px; margin:12px 0 8px; color:var(--accent); text-shadow:0 0 8px var(--accent) }
-    .hud{ display:flex; gap:12px; flex-wrap:wrap; font-size:14px }
-    .hud > div{ background:#ffffff0c; border:1px solid var(--line); padding:6px 10px; border-radius:8px }
-    .overlay{ position:absolute; inset:0; display:none; align-items:center; justify-content:center }
-    .panel{ background:#120626ee; border:1px solid var(--line); border-radius:16px; padding:22px; text-align:center; box-shadow:0 10px 30px #0008 }
-    .btn{ background:#2a1658; color:#fff; border:1px solid #5b3db3; padding:10px 16px; border-radius:10px; cursor:pointer }
-    /* heat bar – a bit lower */
-    .heatbar { position:absolute; left:14px; right:14px; bottom:4px; height:8px; border-radius:6px; border:1px solid var(--line); background:#241542; display:none;}
-    .heatfill { height:100%; border-radius:6px; background:linear-gradient(90deg,#7be7ff,#d080ff,#ff76d2); width:0%; }
-    .heatlabel { position:absolute; bottom:18px; left:14px; font-size:12px; opacity:.8 }
-    .overblink { animation: blink 0.6s linear infinite; }
-    @keyframes blink { 50%{ opacity:.35 } }
-  </style>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>악령사냥 v11.4</title>
+<style>
+  :root { --bg:#0a0014; --line:#3a2360; --text:#e9d7ff; --accent:#d080ff; --good:#73ffdf; --pink:#ff76d2; }
+  *{ box-sizing:border-box }
+  body{ margin:0; min-height:100vh; display:grid; place-items:center; background:radial-gradient(950px 650px at 70% 20%,#1a0038,var(--bg)); color:var(--text); font-family:"Noto Sans KR",system-ui,sans-serif }
+  .stage{ position:relative; width:100%; max-width:960px }
+  #game{ width:100%; aspect-ratio:16/9; background:#000; border:2px solid var(--line); border-radius:12px; display:block; touch-action:none }
+  .title{ font-weight:900; font-size:20px; margin:12px 0 8px; color:var(--accent); text-shadow:0 0 8px var(--accent) }
+  .hud{ display:flex; gap:12px; flex-wrap:wrap; font-size:14px }
+  .hud > div{ background:#ffffff12; border:1px solid var(--line); padding:6px 10px; border-radius:8px }
+  .overlay{ position:absolute; inset:0; display:none; align-items:center; justify-content:center }
+  .panel{ background:#120626ee; border:1px solid var(--line); border-radius:16px; padding:22px; text-align:center; box-shadow:0 10px 30px #0008 }
+  .btn{ background:#2a1658; color:#fff; border:1px solid #5b3db3; padding:10px 16px; border-radius:10px; cursor:pointer }
+
+  /* heat bar – a bit lower */
+  .heatbar { position:absolute; left:14px; right:14px; bottom:4px; height:8px; border-radius:6px; border:1px solid var(--line); background:#241542; display:none;}
+  .heatfill { height:100%; border-radius:6px; background:linear-gradient(90deg,#7be7ff,#d080ff,#ff76d2); width:0%; }
+  .heatlabel { position:absolute; bottom:18px; left:14px; font-size:12px; opacity:.8 }
+  .overblink { animation: blink 0.6s linear infinite; }
+  @keyframes blink { 50%{ opacity:.35 } }
+
+  /* dash bar */
+  .dashbar { position:absolute; left:50%; transform:translateX(-50%); bottom:20px; width:240px; height:10px; border:1px solid #7b4dff; border-radius:8px; background:#1b0d39; }
+  .dashfill { height:100%; width:0%; background:linear-gradient(90deg,#a177ff,#e3b3ff); border-radius:8px; }
+  .dashlabel{ position:absolute; left:50%; transform:translateX(-50%); bottom:34px; font-size:12px; color:#d9c8ff; text-shadow:0 0 6px #8f6aff }
+</style>
 </head>
 <body>
   <div class="stage">
-    <div class="title">🎮 악령사냥 <small style="opacity:.7">v11.3</small></div>
+    <div class="title">🎮 악령사냥 <small style="opacity:.7">v11.4</small></div>
     <canvas id="game"></canvas>
 
     <div class="hud">
@@ -48,14 +54,22 @@
 
     <div id="heatbar" class="heatbar"><div id="heatfill" class="heatfill"></div></div>
     <div id="heatlabel" class="heatlabel"></div>
+
+    <div class="dashlabel" id="dashlabel">DASH READY (Shift)</div>
+    <div class="dashbar"><div id="dashfill" class="dashfill"></div></div>
   </div>
 
 <script>
 (() => {
   const canvas=document.getElementById('game'), ctx=canvas.getContext('2d');
-  const ui={score:qs('#score'),weapon:qs('#weapon'),hp:qs('#hp'),hpmax:qs('#hpmax'),boss:qs('#boss'),diff:qs('#diff'),status:qs('#status'),
-            overlay:qs('#overlay'),finalScore:qs('#finalScore'),retryBtn:qs('#retryBtn'),unlocks:qs('#unlocks'),
-            heatbar:qs('#heatbar'), heatfill:qs('#heatfill'), heatlabel:qs('#heatlabel')};
+  const ui={
+    score:qs('#score'), weapon:qs('#weapon'), hp:qs('#hp'), hpmax:qs('#hpmax'),
+    boss:qs('#boss'), diff:qs('#diff'), status:qs('#status'),
+    overlay:qs('#overlay'), finalScore:qs('#finalScore'), retryBtn:qs('#retryBtn'),
+    unlocks:qs('#unlocks'),
+    heatbar:qs('#heatbar'), heatfill:qs('#heatfill'), heatlabel:qs('#heatlabel'),
+    dashfill:qs('#dashfill'), dashlabel:qs('#dashlabel')
+  };
   function qs(s){return document.querySelector(s)}
   function resize(){const r=canvas.getBoundingClientRect(); canvas.width=r.width; canvas.height=r.height;}
   new ResizeObserver(resize).observe(canvas);
@@ -69,14 +83,18 @@
   const imgZoey=new Image(); imgZoey.src='zoey.png';
   const imgMira=new Image(); imgMira.src='mira.png';
   const imgAbby=new Image(); imgAbby.src='abby.png';
-  const imgBoom=new Image(); imgBoom.src='boom.png';   // 🔸 Mira 폭발 이미지
+  const imgBoom=new Image(); imgBoom.src='boom.png';   // Mira 폭발 이미지
 
   // input
   const keys=new Set(); const mouse={x:0,y:0,down:false};
-  addEventListener('keydown',e=>{const k=e.key.toLowerCase(); keys.add(k); if(k==='r'&&state.over) restart();
+  addEventListener('keydown',e=>{
+    const k=e.key.toLowerCase();
+    keys.add(k);
+    if(k==='r'&&state.over) restart();
     if(k==='1') weapon.kind='pistol';
     if(k==='2' && weapon.unlocked.shotgun) weapon.kind='shotgun';
     if(k==='3' && weapon.unlocked.laser) weapon.kind='laser';
+    if(k==='shift') tryDash();                // 🔸 대쉬
     updateWeaponUI();
   });
   addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
@@ -86,12 +104,14 @@
   function setMouse(e){const r=canvas.getBoundingClientRect(); mouse.x=e.clientX-r.left; mouse.y=e.clientY-r.top;}
 
   // state
-  const MAX_HP=5;
-  const BASE_SPEED=230;
+  const MAX_HP=5, BASE_SPEED=230;
   const state={
-    score:0,hp:MAX_HP,wave:1,boss:null,over:false,time:0,invuln:0,diff:1.0,
-    shield:null, explosions:[], flashes:[],
-    haste:0 // 🔸 Mira 버프 타이머(초) — 남는 동안 이동속도 x1.6
+    score:0,hp:MAX_HP,wave:1,boss:null,over:false,time:0,
+    invuln:0,                        // 일반 피격 무적(피격/대쉬로 증가)
+    diff:1.0, shield:null,          // zoey shield
+    explosions:[], flashes:[],
+    haste:0,                         // Mira 속도 버프 타이머
+    dash:{cd:0, t:0, active:false}  // 대쉬 상태
   };
   ui.hpmax.textContent=MAX_HP;
 
@@ -101,7 +121,7 @@
 
   const enemies=[], enemyBullets=[], bullets=[], lasers=[], heals=[], items=[];
 
-  // Enemies
+  // ---- Enemies ----
   class EnemyBase{constructor(x,y){this.x=x;this.y=y;this.r=20;this.hp=3;this.dead=false;this.baseSpd=70;} aim(){return Math.atan2(player.y-this.y,player.x-this.x)}}
   class EnemyChaser extends EnemyBase{update(dt){const s=this.baseSpd*state.diff, a=this.aim(); this.x+=Math.cos(a)*s*dt; this.y+=Math.sin(a)*s*dt; if(state.invuln<=0 && dist(this,player)<this.r+player.r){ damagePlayer(1); this.dead=true; }} draw(){ctx.drawImage(imgChaser,this.x-this.r,this.y-this.r,this.r*2,this.r*2);}}
   class EnemyShooter extends EnemyBase{constructor(x,y){super(x,y); this.baseSpd=80; this.hp=2; this.moveT=1.1; this.stopT=0.8; this.timer=this.moveT; this.stopped=false; this.fireCd=0;} update(dt){this.timer-=dt; if(!this.stopped){const s=this.baseSpd*state.diff, a=this.aim(); this.x+=Math.cos(a)*s*dt; this.y+=Math.sin(a)*s*dt; if(this.timer<=0){this.stopped=true; this.timer=this.stopT/Math.min(state.diff,2);} } else { this.fireCd-=dt; if(this.fireCd<=0){const base=this.aim(), sp=0.10+Math.min(0.12,(state.diff-1)*0.04); enemyBullets.push(new EnemyBullet(this.x,this.y,base-sp,230*state.diff)); enemyBullets.push(new EnemyBullet(this.x,this.y,base+sp,230*state.diff)); this.fireCd=0.35/Math.min(state.diff,2.5);} if(this.timer<=0){this.stopped=false; this.timer=this.moveT;} } if(state.invuln<=0 && dist(this,player)<this.r+player.r){ damagePlayer(1); this.dead=true; }} draw(){ctx.drawImage(imgShooter,this.x-this.r,this.y-this.r,this.r*2,this.r*2); if(this.stopped){ctx.save(); ctx.strokeStyle='#b83bff'; ctx.globalAlpha=.8; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(this.x,this.y,this.r+4,0,Math.PI*2); ctx.stroke(); ctx.restore();}}}
@@ -110,9 +130,10 @@
 
   class Bullet{constructor(x,y,a,spd,dmg=1,maxDist=Infinity){this.x=x;this.y=y;this.r=4;this.vx=Math.cos(a)*spd;this.vy=Math.sin(a)*spd;this.dmg=dmg;this.max=maxDist;this.d=0;this.dead=false;} update(dt){const dx=this.vx*dt,dy=this.vy*dt; this.x+=dx; this.y+=dy; this.d+=Math.hypot(dx,dy); if(this.d>=this.max) this.dead=true; if(this.x<0||this.y<0||this.x>canvas.width||this.y>canvas.height) this.dead=true;} draw(){ctx.fillStyle='#73ffdf'; ctx.beginPath(); ctx.arc(this.x,this.y,this.r,0,Math.PI*2); ctx.fill();}}
   class EnemyBullet{constructor(x,y,a,spd){this.x=x;this.y=y;this.r=4;this.vx=Math.cos(a)*spd;this.vy=Math.sin(a)*spd;this.dead=false;} update(dt){this.x+=this.vx*dt; this.y+=this.vy*dt; if(this.x<-10||this.y<-10||this.x>canvas.width+10||this.y>canvas.height+10) this.dead=true;} draw(){ctx.fillStyle='#ff5fb1'; ctx.beginPath(); ctx.arc(this.x,this.y,this.r,0,Math.PI*2); ctx.fill();}}
+
   class Heal{ constructor(x,y){this.x=x; this.y=y; this.r=18; this.dead=false;} draw(){ctx.drawImage(imgHeal,this.x-this.r,this.y-this.r,this.r*2,this.r*2);} }
 
-  // Laser (가시성 강화 + 첫 틱 보장)
+  // ---- Laser (가시성 강화 + 첫 틱 보장) ----
   class LaserBeam{
     constructor(x,y,angle){ this.x=x; this.y=y; this.a=angle; this.t=0; this.state='charge'; this.charge=0.32; this.beam=0.24; this.tick=0; this.flash=0.12; }
     update(dt){
@@ -137,26 +158,26 @@
       }else if(this.state==='beam'){
         ctx.save();
         ctx.globalCompositeOperation='lighter';
-        ctx.strokeStyle='#b83bff66'; ctx.lineWidth=18; ctx.beginPath(); ctx.moveTo(this.x,this.y); ctx.lineTo(ex,ey); ctx.stroke(); // outer glow
-        ctx.strokeStyle='#d080ff'; ctx.lineWidth=10; ctx.stroke();                                        // main
-        ctx.strokeStyle='#eaffff'; ctx.lineWidth=3; ctx.setLineDash([]); ctx.stroke();                    // core
+        ctx.strokeStyle='#b83bff66'; ctx.lineWidth=18; ctx.beginPath(); ctx.moveTo(this.x,this.y); ctx.lineTo(ex,ey); ctx.stroke(); // glow
+        ctx.strokeStyle='#d080ff'; ctx.lineWidth=10; ctx.stroke();                                      // body
+        ctx.strokeStyle='#eaffff'; ctx.lineWidth=3; ctx.setLineDash([]); ctx.stroke();                  // core
         ctx.restore();
       }
     }
     get dead(){return this.state==='done'}
   }
 
-  // Items + Explosion(boom.png 사용)
+  // ---- Items + Explosion(boom.png) ----
   class ZoeyItem{ constructor(x,y){this.x=x;this.y=y;this.r=18;this.dead=false;} draw(){ctx.drawImage(imgZoey,this.x-this.r,this.y-this.r,this.r*2,this.r*2);} }
   class MiraItem{ constructor(x,y){this.x=x;this.y=y;this.r=18;this.dead=false;} draw(){ctx.drawImage(imgMira,this.x-this.r,this.y-this.r,this.r*2,this.r*2);} }
   class Explosion{
     constructor(x,y){ this.x=x; this.y=y; this.t=0; this.duration=0.6; this.done=false; }
     update(dt){ this.t += dt; if(this.t>=this.duration) this.done=true; }
     draw(){
-      const p=this.t/this.duration;                 // 0 → 1
-      const size = 220 + p*120;                     // 점점 커짐
+      const p=this.t/this.duration;             // 0 → 1
+      const size = 240 + p*140;                 // 점점 커짐
       ctx.save();
-      ctx.globalAlpha = 1 - p;                      // 서서히 사라짐
+      ctx.globalAlpha = 1 - p;
       ctx.drawImage(imgBoom, this.x-size/2, this.y-size/2, size, size);
       ctx.restore();
     }
@@ -191,18 +212,22 @@
     if(state.score>=500 && Math.random()<0.0008) items.push(new MiraItem(Math.random()*canvas.width,Math.random()*canvas.height));
   }
 
-  // damage / score
+  // scoring & damage
   function addScore(n){ state.score+=n; ui.score.textContent=state.score; }
   function damagePlayer(n){
     if(state.invuln>0) return;
-    if(state.shield){ state.shield=null; state.explosions.push(new Explosion(player.x,player.y)); return; }
-    state.hp=Math.max(0,state.hp-n); ui.hp.textContent=state.hp; state.invuln=2.0; if(state.hp<=0) gameOver();
+    if(state.shield){ state.shield=null; return; }   // 🔸 보호막만 소모, 이펙트 없음
+    state.hp=Math.max(0,state.hp-n); ui.hp.textContent=state.hp; state.invuln=2.0;
+    if(state.hp<=0) gameOver();
   }
 
   function onBossDead(){ if(!state.boss) return; state.boss.dead=true; state.boss=null; state.wave+=1; state.diff = Math.round(state.diff*1.28*100)/100; ui.diff.textContent=state.diff.toFixed(2)+'x'; ui.boss.textContent='-'; }
 
-  // fire & weapons (샷건 강화 유지: 근접 보너스 + 넉백)
+  // ---- Fire & weapons ----
   function fire(){
+    // 대쉬 중에는 발사 불가
+    if(state.dash.active) return;
+
     if(weapon.kind==='pistol'){ spawnBullet(1,520,Infinity); player.fireCd=0.18; return; }
     if(weapon.kind==='shotgun' && weapon.unlocked.shotgun){
       const base=Math.atan2(mouse.y-player.y,mouse.x-player.x);
@@ -221,14 +246,32 @@
   }
   function spawnBullet(dmg,spd,maxD){ const a=Math.atan2(mouse.y-player.y,mouse.x-player.x); bullets.push(new Bullet(player.x,player.y,a,spd,dmg,maxD)); }
 
+  // ---- Dash ----
+  function tryDash(){
+    if(state.dash.cd<=0 && !state.dash.active && !state.over){
+      state.dash.active=true;
+      state.dash.t=0.4;                 // 지속
+      state.dash.cd=5.0;                // 쿨타임
+      state.invuln=Math.max(state.invuln,0.4); // 무적 보장
+    }
+  }
+
   function update(dt){
     if(state.over) return;
-    state.time+=dt; if(state.invuln>0) state.invuln-=dt;
+    state.time+=dt;
+    if(state.invuln>0) state.invuln-=dt;
 
-    // Mira 버프 경과: 속도 x1.6
-    state.haste = Math.max(0, state.haste - dt);
-    player.speed = BASE_SPEED * (state.haste>0 ? 1.6 : 1);
+    // Mira 속도 버프
+    state.haste=Math.max(0,state.haste-dt);
 
+    // Dash 진행
+    if(state.dash.cd>0) state.dash.cd=Math.max(0,state.dash.cd-dt);
+    if(state.dash.active){
+      state.dash.t-=dt;
+      if(state.dash.t<=0){ state.dash.active=false; }
+    }
+
+    // unlocks
     if(state.score>=100) weapon.unlocked.shotgun=true;
     if(state.score>=250) weapon.unlocked.laser=true;
     updateWeaponUI();
@@ -242,10 +285,14 @@
       ui.heatfill.style.width = Math.min(100, weapon.heat).toFixed(0)+'%';
       ui.heatlabel.textContent = weapon.overheated ? 'Laser HEAT: OVERHEATED' : 'Laser HEAT';
       ui.heatlabel.className = 'heatlabel' + (weapon.overheated ? ' overblink' : '');
-    } else {
-      ui.heatlabel.textContent='';
-    }
+    } else ui.heatlabel.textContent='';
 
+    // dash HUD
+    const ratio = (5 - state.dash.cd)/5;
+    ui.dashfill.style.width = (Math.max(0, Math.min(1, ratio))*100) + '%';
+    ui.dashlabel.textContent = state.dash.cd<=0 ? 'DASH READY (Shift)' : `DASH COOLDOWN ${state.dash.cd.toFixed(1)}s`;
+
+    // spawns
     const spawnRate=0.012+(state.diff-1)*0.015;
     if(Math.random()<spawnRate) spawnEnemyEdge();
     maybeSpawnItems();
@@ -259,15 +306,15 @@
 
     if(state.boss) state.boss.update(dt);
 
-    // bullet collisions + 샷건 근접 보너스/넉백
+    // bullet collisions (shotgun 근접 보너스 + 넉백 유지)
     for(const b of bullets){
       for(const e of enemies){
         if(!e.dead && !b.dead && dist(e,b)<e.r+b.r){
-          let dmg = b.dmg;
-          const dToPlayer = dist(e, player);
-          if(b.max===260 && dToPlayer<=90) dmg *= 1.5; // close-range bonus
-          e.hp -= dmg;
-          if(b.max===260){ const dir=Math.atan2(e.y-player.y,e.x-player.x); const kb=80; e.x += Math.cos(dir)*kb*0.06; e.y += Math.sin(dir)*kb*0.06; }
+          let dmg=b.dmg;
+          const dToPlayer=dist(e,player);
+          if(b.max===260 && dToPlayer<=90) dmg*=1.5;
+          e.hp-=dmg;
+          if(b.max===260){ const dir=Math.atan2(e.y-player.y,e.x-player.x); const kb=80; e.x+=Math.cos(dir)*kb*0.06; e.y+=Math.sin(dir)*kb*0.06; }
           b.dead=true;
           if(e.hp<=0){ e.dead=true; addScore(10); }
         }
@@ -278,7 +325,7 @@
     }
     for(const eb of enemyBullets){ if(dist(eb,player)<eb.r+player.r){ eb.dead=true; damagePlayer(1); } }
 
-    // 픽업 처리
+    // pickups
     heals.forEach(h=>{ if(dist(h,player)<h.r+player.r){ h.dead=true; state.hp=Math.min(MAX_HP,state.hp+1); ui.hp.textContent=state.hp; }});
     for(const it of items){
       if(dist(it,player)<it.r+player.r){
@@ -286,7 +333,7 @@
         if(it instanceof ZoeyItem){
           state.shield={angle:0,dist:28};
         }else if(it instanceof MiraItem){
-          triggerMiraExplosion(player.x,player.y); // 🔸 폭발 + 가속 버프
+          triggerMiraExplosion(player.x,player.y); // 폭발 + 가속
         }
       }
     }
@@ -297,21 +344,22 @@
 
     if(!state.boss && state.score>=state.wave*500){ state.boss=new Boss(); ui.boss.textContent='등장'; }
 
-    // movement
+    // movement (대쉬/버프 적용)
     let dx=(keys.has('d')?1:0)-(keys.has('a')?1:0);
     let dy=(keys.has('s')?1:0)-(keys.has('w')?1:0);
     const len=Math.hypot(dx,dy)||1;
-    player.x+=dx/len*player.speed*dt; player.y+=dy/len*player.speed*dt;
+    const speedMult = (state.haste>0?1.6:1) * (state.dash.active?2.5:1);
+    player.x+=dx/len*player.speed*speedMult*dt; player.y+=dy/len*player.speed*speedMult*dt;
     player.x=clamp(player.x,player.r,canvas.width-player.r); player.y=clamp(player.y,player.r,canvas.height-player.r);
 
     player.fireCd-=dt; if(mouse.down && player.fireCd<=0) fire();
     ui.status.textContent = state.over ? 'Game Over' : (state.boss ? 'Boss' : 'Survive');
   }
 
-  // 🔸 Mira 폭발 로직 (반경 200, 보스 피해 없음)
+  // Mira 폭발(반경 240, 보스 피해 X)
   function triggerMiraExplosion(x,y){
     state.explosions.push(new Explosion(x,y));
-    enemies.forEach(e=>{ if(dist({x,y},e) < 200){ e.dead=true; addScore(10); } });
+    enemies.forEach(e=>{ if(dist({x,y},e) < 240){ e.dead=true; addScore(10); } });
     state.haste = 1.0; // 1초 가속
   }
 
@@ -338,7 +386,7 @@
     const blink = state.invuln>0 ? (Math.sin(state.time*20)>0?0.45:1) : 1;
     ctx.save(); ctx.globalAlpha=blink; ctx.drawImage(imgPlayer,player.x-player.r,player.y-player.r,player.r*2,player.r*2); ctx.restore();
 
-    // shield orbit (Zoey)
+    // Zoey shield orbit
     if(state.shield){ state.shield.angle += 6/60; const sx = player.x + Math.cos(state.shield.angle)*state.shield.dist; const sy = player.y + Math.sin(state.shield.angle)*state.shield.dist; ctx.drawImage(imgZoey, sx-14, sy-14, 28, 28); }
 
     // HP & Boss bars
@@ -352,12 +400,15 @@
 
   function gameOver(){ state.over=true; ui.overlay.style.display='flex'; ui.finalScore.textContent='최종 점수: '+state.score; }
   function restart(){
-    state.score=0; state.hp=MAX_HP; state.wave=1; state.boss=null; state.over=false; state.time=0; state.invuln=0; state.diff=1.0; state.shield=null; state.explosions.length=0; state.flashes.length=0; state.haste=0;
+    state.score=0; state.hp=MAX_HP; state.wave=1; state.boss=null; state.over=false; state.time=0; state.invuln=0;
+    state.diff=1.0; state.shield=null; state.explosions.length=0; state.flashes.length=0;
+    state.haste=0; state.dash={cd:0,t:0,active:false};
     enemies.length=0; bullets.length=0; lasers.length=0; enemyBullets.length=0; heals.length=0; items.length=0;
     player.x=canvas.width/2; player.y=canvas.height/2; player.fireCd=0; player.speed=BASE_SPEED;
     weapon.kind='pistol'; weapon.unlocked={pistol:true,shotgun:false,laser:false}; weapon.heat=0; weapon.overheated=false;
     ui.overlay.style.display='none'; ui.score.textContent='0'; ui.hp.textContent=String(MAX_HP); ui.weapon.textContent='Pistol'; ui.boss.textContent='-'; ui.diff.textContent='1.00x';
     updateWeaponUI(); ui.heatbar.style.display='none'; ui.heatlabel.textContent='';
+    ui.dashfill.style.width='100%'; ui.dashlabel.textContent='DASH READY (Shift)';
   }
   ui.retryBtn.addEventListener('click',restart);
 
