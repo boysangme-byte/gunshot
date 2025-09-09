@@ -25,7 +25,7 @@
 </head>
 <body>
   <div class="stage">
-    <div class="title">🎮 악령사냥 <small style="opacity:.7;font-weight:600;">v4</small></div>
+    <div class="title">🎮 악령사냥 <small style="opacity:.7;font-weight:600;">v5</small></div>
     <canvas id="game"></canvas>
 
     <!-- Game Over Overlay -->
@@ -58,7 +58,7 @@
   function resize(){const r=canvas.getBoundingClientRect(); canvas.width=r.width; canvas.height=r.height;}
   new ResizeObserver(resize).observe(canvas);
 
-  // Load images (enemy updated)
+  // Load images
   const imgPlayer=new Image(); imgPlayer.src="player.png";
   const imgEnemy=new Image(); imgEnemy.src="enemy.png";
   const imgBoss=new Image(); imgBoss.src="boss.png";
@@ -80,7 +80,7 @@
   window.addEventListener("mouseup",()=>mouse.down=false);
   canvas.addEventListener("mousemove",e=>{const r=canvas.getBoundingClientRect(); mouse.x=e.clientX-r.left; mouse.y=e.clientY-r.top;});
 
-  // state (player max HP = 5)
+  // state
   const MAX_HP = 5;
   const state={score:0, hp:MAX_HP, wave:1, boss:null, over:false, time:0, invuln:1.2, diff:1.0};
   ui.hpmax.textContent = MAX_HP;
@@ -88,6 +88,7 @@
   let player={x:400,y:260,r:22,speed:230,fireCd:0,dash:0};
   const bullets=[], enemies=[], heals=[];
   const lasers=[]; // visible laser beams
+  const enemyBullets=[]; // boss bullets
 
   const weapon = {
     kind:'pistol',
@@ -107,12 +108,35 @@
     draw(){ ctx.drawImage(imgEnemy, this.x-this.r, this.y-this.r, this.r*2, this.r*2); }
   }
   class Boss{
-    constructor(){ this.x=canvas.width/2; this.y=90; this.r=46; this.baseHp=140; this.hp=Math.round(this.baseHp*state.diff); this.dead=false; }
+    constructor(){
+      this.x=canvas.width/2; this.y=90; this.r=46;
+      this.baseHp=140; this.hp=Math.round(this.baseHp*state.diff); this.dead=false;
+      this.shootCD=0.9/Math.min(state.diff,2.2); // faster at higher diff (cap)
+      this._timer=0;
+    }
     update(dt){
-      const spd=45*state.diff;
+      const spd=55*state.diff; // move a bit faster than v4
       const a=Math.atan2(player.y-this.y, player.x-this.x);
       this.x += Math.cos(a)*spd*dt; this.y += Math.sin(a)*spd*dt;
       if(!state.over && dist(this, player) < this.r + player.r){ hitPlayer(2); }
+      // shooting patterns
+      this._timer -= dt;
+      if(this._timer<=0){
+        this._timer = this.shootCD;
+        if(Math.random()<0.5){
+          // aimed triple shot
+          const base = Math.atan2(player.y-this.y, player.x-this.x);
+          for(let i=-1;i<=1;i++){
+            enemyBullets.push(new EnemyBullet(this.x,this.y, base + i*0.12, 220*state.diff));
+          }
+        } else {
+          // radial burst
+          const n = 8 + Math.floor(state.diff*2);
+          for(let i=0;i<n;i++){
+            enemyBullets.push(new EnemyBullet(this.x,this.y, i*(Math.PI*2/n), 180*state.diff));
+          }
+        }
+      }
     }
     draw(){ ctx.drawImage(imgBoss, this.x-this.r, this.y-this.r, this.r*2, this.r*2); }
   }
@@ -121,9 +145,14 @@
     update(dt){ this.x+=this.vx*dt; this.y+=this.vy*dt; if(this.x<0||this.y<0||this.x>canvas.width||this.y>canvas.height) this.dead=true; }
     draw(){ ctx.fillStyle="#73ffdf"; ctx.beginPath(); ctx.arc(this.x,this.y,this.r,0,Math.PI*2); ctx.fill(); }
   }
+  class EnemyBullet{
+    constructor(x,y,a,speed){ this.x=x; this.y=y; this.r=4; this.vx=Math.cos(a)*speed; this.vy=Math.sin(a)*speed; this.dead=false; }
+    update(dt){ this.x+=this.vx*dt; this.y+=this.vy*dt; if(this.x<-10||this.y<-10||this.x>canvas.width+10||this.y>canvas.height+10) this.dead=true; }
+    draw(){ ctx.fillStyle="#ff5fb1"; ctx.beginPath(); ctx.arc(this.x,this.y,this.r,0,Math.PI*2); ctx.fill(); }
+  }
   class Heal{ constructor(x,y){ this.x=x; this.y=y; this.r=18; this.dead=false; } draw(){ ctx.drawImage(imgHeal, this.x-this.r, this.y-this.r, this.r*2, this.r*2); } }
   class LaserBeam{
-    constructor(x,y,angle){ this.x=x; this.y=y; this.a=angle; this.t=0; this.life=0.25; } // visible for 0.25s
+    constructor(x,y,angle){ this.x=x; this.y=y; this.a=angle; this.t=0; this.life=0.25; }
     update(dt){
       this.t += dt;
       const endX = this.x + Math.cos(this.a)*1200;
@@ -132,7 +161,7 @@
         if(lineCircle(this.x,this.y,endX,endY,e.x,e.y,e.r)){ e.hp -= 2; if(e.hp<=0){ e.dead=true; addScore(10); } }
       });
       if(state.boss && !state.boss.dead && lineCircle(this.x,this.y,endX,endY,state.boss.x,state.boss.y,state.boss.r)){
-        state.boss.hp -= 2; if(state.boss.hp<=0){ onBossDead(); addScore(100); } // 100 points on boss kill
+        state.boss.hp -= 2; if(state.boss.hp<=0){ onBossDead(); addScore(100); }
       }
     }
     draw(){
@@ -171,7 +200,7 @@
   function hitPlayer(dmg=1){
     state.hp = Math.max(0, state.hp - dmg);
     ui.hp.textContent = state.hp;
-    state.invuln = 0.6;
+    state.invuln = 0.4;
     if(state.hp<=0) gameOver();
   }
 
@@ -206,8 +235,8 @@
     state.boss.dead = true;
     state.boss = null;
     state.wave += 1;
-    // difficulty scales up
-    state.diff = Math.round(state.diff*1.18*100)/100;
+    // Stronger difficulty scaling
+    state.diff = Math.round(state.diff*1.28*100)/100; // was 1.18
     ui.diff.textContent = state.diff.toFixed(2)+'x';
     ui.boss.textContent='-';
   }
@@ -221,14 +250,16 @@
     if(state.score>=250) weapon.unlocked.laser = true;
     updateWeaponUI();
 
-    // enemy spawn: scales with difficulty
-    if(Math.random() < (0.015 + (state.diff-1)*0.01)) spawnEnemyEdge();
+    // enemy spawn: scales with difficulty (stronger)
+    const baseSpawn = 0.012 + (state.diff-1)*0.015;
+    if(Math.random() < baseSpawn) spawnEnemyEdge();
 
     enemies.forEach(e=>e.update(dt));
     bullets.forEach(b=>b.update(dt));
     lasers.forEach(l=>l.update(dt));
+    enemyBullets.forEach(eb=>eb.update(dt));
 
-    // bullet collisions
+    // bullet collisions (player bullets)
     for(const b of bullets){
       for(const e of enemies){
         if(!e.dead && !b.dead && dist(e,b) < e.r + b.r){
@@ -238,19 +269,25 @@
       }
       if(state.boss && !b.dead && !state.boss.dead && dist(state.boss,b) < state.boss.r + b.r){
         state.boss.hp -= b.dmg; b.dead=true;
-        if(state.boss.hp<=0){ onBossDead(); addScore(100); } // 100 points on boss kill
+        if(state.boss.hp<=0){ onBossDead(); addScore(100); }
       }
     }
+    // boss bullets -> player
+    for(const eb of enemyBullets){
+      if(!state.over && dist(eb, player) < eb.r + player.r){ eb.dead=true; hitPlayer(1); }
+    }
+
     // cleanup
     for(let i=bullets.length-1;i>=0;i--){ if(bullets[i].dead) bullets.splice(i,1); }
     for(let i=enemies.length-1;i>=0;i--){ if(enemies[i].dead) enemies.splice(i,1); }
     for(let i=lasers.length-1;i>=0;i--){ if(lasers[i].dead) lasers.splice(i,1); }
+    for(let i=enemyBullets.length-1;i>=0;i--){ if(enemyBullets[i].dead) enemyBullets.splice(i,1); }
 
     // boss spawn: 500*n score
     if(!state.boss && state.score >= state.wave*500){ state.boss = new Boss(); ui.boss.textContent='등장'; }
 
-    // heals
-    if(Math.random()<0.0012) heals.push(new Heal(Math.random()*canvas.width, Math.random()*canvas.height));
+    // heals: LOWER frequency
+    if(Math.random()<0.0006) heals.push(new Heal(Math.random()*canvas.width, Math.random()*canvas.height));
     for(const h of heals){ if(dist(h,player) < h.r + player.r){ h.dead=true; state.hp=Math.min(MAX_HP, state.hp+1); ui.hp.textContent=state.hp; } }
     for(let i=heals.length-1;i>=0;i--){ if(heals[i].dead) heals.splice(i,1); }
 
@@ -275,6 +312,7 @@
     enemies.forEach(e=>e.draw());
     if(state.boss) state.boss.draw();
     bullets.forEach(b=>b.draw());
+    enemyBullets.forEach(eb=>eb.draw());
     heals.forEach(h=>h.draw());
     lasers.forEach(l=>l.draw());
     ctx.drawImage(imgPlayer, player.x-player.r, player.y-player.r, player.r*2, player.r*2);
@@ -302,7 +340,7 @@
   }
   function restart(){
     state.score=0; state.hp=MAX_HP; state.wave=1; state.boss=null; state.over=false; state.time=0; state.invuln=1.2; state.diff=1.0;
-    enemies.length=0; bullets.length=0; heals.length=0; lasers.length=0;
+    enemies.length=0; bullets.length=0; heals.length=0; lasers.length=0; enemyBullets.length=0;
     player.x=canvas.width/2; player.y=canvas.height/2; player.fireCd=0; weapon.kind='pistol'; weapon.unlocked={pistol:true,shotgun:false,laser:false};
     ui.overlay.style.display='none'; ui.score.textContent='0'; ui.hp.textContent=String(MAX_HP); ui.weapon.textContent='Pistol'; ui.boss.textContent='-'; ui.diff.textContent='1.00x';
     updateWeaponUI();
