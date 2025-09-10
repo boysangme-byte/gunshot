@@ -27,9 +27,9 @@
             background:#1a0b2fcc; color:#e9d7ff; border:1px solid var(--line); padding:6px 10px; border-radius:10px; }
 
   /* Dash 쿨다운 (캔버스 위) */
-  .dashlabel{ position:absolute; left:50%; transform:translateX(-50%); bottom:82px; font-size:12px; color:#d9c8ff; text-shadow:0 0 6px #8f6aff }
+  .dashlabel{ position:absolute; left:50%; transform:translateX(-50%); bottom:110px; font-size:12px; color:#d9c8ff; text-shadow:0 0 6px #8f6aff }
   .dashready{ color:#9affc2; text-shadow:0 0 6px #2fff8f }
-  .dashbar{ position:absolute; left:50%; transform:translateX(-50%); bottom:66px; width:260px; height:10px; border:1px solid #7b4dff; border-radius:8px; background:#1b0d39; }
+  .dashbar{ position:absolute; left:50%; transform:translateX(-50%); bottom:100px; width:260px; height:10px; border:1px solid #7b4dff; border-radius:8px; background:#1b0d39; }
   .dashfill{ height:100%; width:0%; background:linear-gradient(90deg,#a177ff,#e3b3ff); border-radius:8px; transition:width .1s linear }
 
   /* Game Over 오버레이 */
@@ -109,6 +109,7 @@
   const imgPlayer=load('player.png'), imgChaser=load('enemy.png'), imgShooter=load('Shooter.png'), imgBoss=load('boss.png');
   const imgHeal=load('heal.png'), imgZoey=load('zoey.png'), imgMira=load('mira.png'), imgAbby=load('abby.png');
   const imgBoom=load('boom.png'), imgMystery=load('mystery.png');
+  const imgZoeyBoom=load('zoeyboom.png'); // ★ ZoeyBoom 전용 스프라이트
   function load(src){const i=new Image(); i.src=src; return i;}
 
   // ====== 입력 ======
@@ -134,7 +135,7 @@
     score:0, hp:MAX_HP, wave:1, boss:null, over:false, time:0,
     invuln:0, diff:1.0, haste:0,
     dash:{cd:0, t:0, active:false, postDelay:0},
-    nextMystery:350, mysteries:[], explosions:[],
+    nextMystery:275, mysteries:[], explosions:[],
     zoeyStacks:0, zoeyAngle:0
   };
   ui.hpmax.textContent=MAX_HP;
@@ -197,7 +198,7 @@
       const mx=120,my=80;
       let tx=rand(mx,canvas.width-mx), ty=rand(my,canvas.height-my);
       for(let i=0;i<5 && Math.hypot(player.x-tx,player.y-ty)<160;i++){ tx=rand(mx,canvas.width-mx); ty=rand(my,canvas.height-my); }
-      this.tx=tx; this.ty=ty; this.exitX=-90; this.speed=260; this.r=26; this.state='arrive'; this.t=0; this.dead=false;
+      this.tx=tx; this.ty=ty; this.exitX=-90; this.speed=300; this.r=26; this.state='arrive'; this.t=0; this.dead=false;
     }
     update(dt){
       this.t+=dt;
@@ -312,6 +313,26 @@
     state.haste=1.0; // 1초 가속
   }
 
+  // ====== ★ ZoeyBoom (새로 추가) ======
+  class ZoeyBoom {
+    constructor(x,y){ this.x=x; this.y=y; this.r=28; this.angle=rand(0,TAU); this.spd=420; this.done=false; }
+    update(dt){
+      this.x+=Math.cos(this.angle)*this.spd*dt;
+      this.y+=Math.sin(this.angle)*this.spd*dt;
+      // 범위 내 적 제거
+      enemies.forEach(e=>{ if(!e.dead && dist(this,e)<60){ e.dead=true; addScore(8);} });
+      // 보스 고정 피해
+      if(state.boss && !state.boss.dead && dist(this,state.boss)<70){
+        state.boss.hp-=20;
+        if(state.boss.hp<=0){ onBossDead(); addScore(100); }
+      }
+      // 화면 밖 제거
+      if(this.x<-80||this.y<-80||this.x>canvas.width+80||this.y>canvas.height+80) this.done=true;
+    }
+    draw(){ ctx.save(); ctx.globalAlpha=0.85; ctx.drawImage(imgZoeyBoom,this.x-this.r,this.y-this.r,this.r*2,this.r*2); ctx.restore(); }
+  }
+  const zoeyBooms=[];
+
   // ====== 스폰 ======
   function spawnEnemyEdge(){
     // 맵 내 최대 적 수 60
@@ -347,7 +368,16 @@
   function canDamage(){ return !(state.dash.active) && state.invuln<=0 && !state.over; }
   function damagePlayer(n){
     if(!canDamage()) return;
-    if(state.zoeyStacks>0){ state.zoeyStacks--; return; } // Zoey 보호막 1중첩 소모
+    // ★ Zoey 보호막 우선 적용: 스택 1 차감 + 1초 무적 + ZoeyBoom 발사
+    if(state.zoeyStacks>0){
+      state.zoeyStacks--;
+      zoeyBooms.push(new ZoeyBoom(player.x,player.y));
+      state.invuln=Math.max(state.invuln,1.0); // 연속 피격 방지
+      // 깜빡임 트리거(기존 효과 활용)
+      ui.hurt.classList.remove('show'); void ui.hurt.offsetWidth; ui.hurt.classList.add('show');
+      setTimeout(()=>ui.hurt.classList.remove('show'),200);
+      return; // 체력은 깎지 않음
+    }
     state.hp=Math.max(0,state.hp-n); state.invuln=2.0; ui.hp.textContent=state.hp;
 
     // 붉은 테두리 플래시 200ms
@@ -415,7 +445,7 @@
     const spawnRate=0.015+(state.diff-1)*0.018;
     if(Math.random()<spawnRate) spawnEnemyEdge();
     maybeSpawnItems();
-    if(state.score>=state.nextMystery){ state.mysteries.push(new Mystery()); state.nextMystery+=350; }
+    if(state.score>=state.nextMystery){ state.mysteries.push(new Mystery()); state.nextMystery+=275; }
 
     // 업데이트
     enemies.forEach(e=>e.update(dt));
@@ -425,6 +455,10 @@
     state.explosions.forEach(ex=>ex.update(dt));
     state.mysteries.forEach(m=>m.update(dt));
     if(state.boss) state.boss.update(dt);
+
+    // ★ ZoeyBoom 업데이트/정리
+    zoeyBooms.forEach(z=>z.update(dt));
+    for(let i=zoeyBooms.length-1;i>=0;i--) if(zoeyBooms[i].done) zoeyBooms.splice(i,1);
 
     // 총알 충돌
     for(const b of bullets){
@@ -489,6 +523,9 @@
     lasers.forEach(l=>l.draw());
     state.explosions.forEach(ex=>ex.draw());
 
+    // ★ ZoeyBoom 렌더
+    zoeyBooms.forEach(z=>z.draw());
+
     // 플레이어 (무적 깜빡임)
     const blink = state.invuln>0 ? (Math.sin(state.time*20)>0?0.45:1) : 1;
     ctx.save(); ctx.globalAlpha=blink; ctx.drawImage(imgPlayer,player.x-player.r,player.y-player.r,player.r*2,player.r*2); ctx.restore();
@@ -525,9 +562,12 @@
   function restart(){
     state.score=0; state.hp=MAX_HP; state.wave=1; state.boss=null; state.over=false; state.time=0; state.invuln=0;
     state.diff=1.0; state.explosions.length=0; state.mysteries.length=0;
-    state.haste=0; state.dash={cd:0,t:0,active:false,postDelay:0}; state.nextMystery=350;
+    state.haste=0; state.dash={cd:0,t:0,active:false,postDelay:0}; state.nextMystery=275;
     state.zoeyStacks=0; state.zoeyAngle=0;
     enemies.length=0; bullets.length=0; lasers.length=0; enemyBullets.length=0; heals.length=0; items.length=0;
+    // ★ ZoeyBoom 초기화
+    zoeyBooms.length=0;
+
     player.x=canvas.width/2; player.y=canvas.height/2; player.fireCd=0; player.speed=BASE_SPEED;
     weapon.kind='pistol'; weapon.unlocked={pistol:true,shotgun:false,laser:false}; weapon.heat=0; weapon.overheated=false;
     ui.overlay.style.display='none'; ui.score.textContent='0'; ui.hp.textContent=String(MAX_HP); ui.boss.textContent='-'; ui.diff.textContent='1.00x';
