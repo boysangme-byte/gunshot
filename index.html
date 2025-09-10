@@ -1,194 +1,201 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-<meta charset="UTF-8"/>
-<title>악령사냥 v12.0</title>
-<style>
-  body{margin:0;background:#0a0015;color:#fff;font-family:Arial, sans-serif;overflow:hidden}
-  canvas{display:block;margin:0 auto;background:#000}
-  #hud{position:absolute;bottom:0;left:0;right:0;display:flex;justify-content:space-around;
-    background:#1a0b2f;color:#e9d7ff;font-size:14px;padding:4px 0;border-top:1px solid #4a2977}
-  #helpBar{position:absolute;bottom:32px;left:0;right:0;text-align:center;font-size:13px;
-    background:#1a0b2f;color:#e9d7ff;padding:6px 12px;border-top:1px solid #4a2977}
-  #dashCooldown{position:absolute;bottom:64px;left:50%;transform:translateX(-50%);width:300px;
-    height:10px;background:#331;border:1px solid #555}
-  #dashBar{height:100%;background:#9f5fff;width:100%}
-  #overlay{position:absolute;inset:0;background:#000c;color:#fff;display:none;align-items:center;justify-content:center;flex-direction:column}
-  #overlay button{margin-top:20px;padding:10px 20px}
-  .damageFlash{position:absolute;inset:0;background:rgba(255,0,0,0.4);display:none;z-index:10}
-</style>
+  <meta charset="UTF-8">
+  <title>악령사냥 v12 Final</title>
+  <style>
+    body { margin:0; background:#140020; font-family:Arial,sans-serif; color:#fff; }
+    #gameContainer { display:flex; justify-content:center; align-items:center; height:100vh; }
+    canvas { background:black; border:2px solid #4b0082; border-radius:10px; }
+    .bar{ height:10px; border-radius:5px; background:#222; margin:3px; overflow:hidden; }
+    .bar-inner{ height:100%; transition:width 0.2s; }
+    #hpFill{ background:#00ffcc; }
+    #bossFill{ background:#ff00ff; }
+    #dashFill{ background:#9370db; }
+    #ui { position:absolute; bottom:0; left:0; width:100%; background:rgba(20,0,40,0.9); font-size:14px; 
+          display:flex; justify-content:space-around; padding:5px; box-sizing:border-box; }
+    #help { position:absolute; bottom:25px; left:0; width:100%; text-align:center; font-size:12px; color:#bbb; }
+    #overlay {
+      position:absolute; top:0; left:0; width:100%; height:100%; display:none;
+      justify-content:center; align-items:center; flex-direction:column;
+      background:rgba(0,0,0,0.7); color:white; font-size:32px;
+    }
+    #overlay button { margin-top:20px; padding:10px 20px; font-size:20px; }
+  </style>
 </head>
 <body>
-<div id="gameContainer" style="position:relative;width:100vw;height:100vh">
-  <canvas id="gameCanvas" width="960" height="600"></canvas>
-  <div id="hud">
-    <div>점수: <span id="score">0</span></div>
-    <div>무기: <span id="weapon">Pistol</span></div>
-    <div>체력: <span id="health">7</span></div>
-    <div>보스: <span id="boss">-</span></div>
-    <div>난이도: <span id="difficulty">1.0x</span></div>
+  <div id="gameContainer">
+    <canvas id="gameCanvas" width="960" height="540"></canvas>
   </div>
-  <div id="helpBar">
-    WASD 이동 · 마우스 발사 · 무기 1/2/3 전환 · Shift 대쉬 ｜ Heal=+1 ｜ Zoey=보호막(3중첩) ｜ Mira=폭발+가속 ｜ 보스=500점마다 ｜ Mystery=범위공격
+  <div class="bar"><div id="hpFill" class="bar-inner"></div></div>
+  <div class="bar"><div id="bossFill" class="bar-inner"></div></div>
+  <div class="bar"><div id="dashFill" class="bar-inner"></div></div>
+  <div id="ui">
+    <div id="score">점수: 0</div>
+    <div id="weapon">무기: Pistol</div>
+    <div id="health">체력: 7 / 7</div>
+    <div id="bossStatus">보스: -</div>
+    <div id="difficulty">난이도: 1.00x</div>
+    <div id="status">상태: Survive</div>
   </div>
-  <div id="dashCooldown"><div id="dashBar"></div></div>
+  <div id="help">
+    WASD 이동 · 마우스 발사 · 무기 1/2/3 전환 · Shift 대쉬<br>
+    Heal=+1 · Zoey=보호막(최대3중첩) · Mira=폭발+가속<br>
+    보스=500점마다 · Mystery=범위공격
+  </div>
   <div id="overlay">
-    <h1>게임 오버</h1>
-    <p>최종 점수: <span id="finalScore">0</span></p>
-    <button onclick="restart()">다시 시작</button>
+    <div id="finalScore"></div>
+    <button onclick="restartGame()">리트라이</button>
   </div>
-  <div id="damageFlash" class="damageFlash"></div>
-</div>
-<script>
-const canvas=document.getElementById("gameCanvas"),ctx=canvas.getContext("2d");
-let keys={},mouse={x:480,y:300,down:false};
-document.addEventListener("keydown",e=>keys[e.key]=true);
-document.addEventListener("keyup",e=>keys[e.key]=false);
-canvas.addEventListener("mousemove",e=>{let r=canvas.getBoundingClientRect();mouse.x=e.clientX-r.left;mouse.y=e.clientY-r.top});
-canvas.addEventListener("mousedown",()=>mouse.down=true);
-canvas.addEventListener("mouseup",()=>mouse.down=false);
 
-let player={x:480,y:300,hp:7,speed:220,fireCd:0,invuln:0,zoey:[]};
-let score=0,difficulty=1,gameOver=false,lasers=[],bullets=[],enemies=[],items=[],boss=null;
-let dashCd=0,dashActive=0;
-let maxEnemies=60;
+  <script>
+    const canvas=document.getElementById("gameCanvas"),ctx=canvas.getContext("2d");
+    const W=canvas.width,H=canvas.height;
 
-function spawnEnemy(){
-  if(enemies.length>=maxEnemies)return;
-  let x=Math.random()<.5?(Math.random()*canvas.width): (Math.random()<.5?-20:canvas.width+20);
-  let y=Math.random()<.5?(Math.random()*canvas.height): (Math.random()<.5?-20:canvas.height+20);
-  enemies.push({x,y,hp:3,type:"normal",r:20});
-}
-function spawnBoss(){ boss={x:canvas.width/2,y:100,hp:160*difficulty,phase:1,cd:0}; }
-function fire(){
-  if(player.fireCd>0)return;
-  if(currentWeapon==="pistol"){
-    bullets.push({x:player.x,y:player.y,vx:(mouse.x-player.x),vy:(mouse.y-player.y),spd:500,r:4,dmg:1});
-    player.fireCd=0.2;
-  }else if(currentWeapon==="shotgun"){
-    for(let i=0;i<7;i++){
-      let a=Math.atan2(mouse.y-player.y,mouse.x-player.x)+(Math.random()-0.5)*0.3;
-      bullets.push({x:player.x,y:player.y,vx:Math.cos(a),vy:Math.sin(a),spd:520,r:4,dmg:1,range:260});
-    }
-    player.fireCd=0.3;
-  }else if(currentWeapon==="laser"){
-    let a=Math.atan2(mouse.y-player.y,mouse.x-player.x);
-    lasers.push({x:player.x,y:player.y,a,t:0});
-    player.fireCd=0.45;
-  }
-}
-let currentWeapon="pistol";
+    // === 이미지 로드 ===
+    const img={};
+    ["player","enemy","boss","shooter","mystery","heal","zoey","mira","abby","boom"].forEach(n=>{
+      img[n]=new Image(); img[n].src=n+".png";
+    });
 
-function update(dt){
-  if(gameOver)return;
-  if(player.invuln>0)player.invuln-=dt;
-  if(dashCd>0)dashCd-=dt;
-  if(dashActive>0){dashActive-=dt;}
-  if(keys["1"])currentWeapon="pistol";
-  if(keys["2"])currentWeapon="shotgun";
-  if(keys["3"])currentWeapon="laser";
-  if(mouse.down)fire();
-  if(player.fireCd>0)player.fireCd-=dt;
+    // === 플레이어 ===
+    const player={x:W/2,y:H/2,r:20,hp:7,maxHp:7,speed:3,weapon:"pistol",
+      dashCooldown:0,dashTime:0,invincible:0,zoeyShields:0};
 
-  let dx=(keys["d"]?1:0)-(keys["a"]?1:0);
-  let dy=(keys["s"]?1:0)-(keys["w"]?1:0);
-  let len=Math.hypot(dx,dy)||1;
-  let sp=player.speed*(dashActive>0?2.5:1);
-  player.x+=dx/len*sp*dt; player.y+=dy/len*sp*dt;
-  player.x=Math.max(0,Math.min(canvas.width,player.x));
-  player.y=Math.max(0,Math.min(canvas.height,player.y));
+    let keys={},bullets=[],enemies=[],items=[],boss=null,score=0,difficulty=1.0,gameOver=false;
 
-  // 적 스폰
-  if(Math.random()<0.015+(difficulty-1)*0.018)spawnEnemy();
-  // 보스 스폰
-  if(score>=500 && !boss)spawnBoss();
-
-  // 총알
-  bullets.forEach(b=>{
-    if(b.range){ b.range-=dt*500; if(b.range<=0)b.dead=true; }
-    b.x+=b.vx*(b.spd?dt:1); b.y+=b.vy*(b.spd?dt:1);
-    if(b.spd){b.x+=b.vx*dt; b.y+=b.vy*dt;}
-    enemies.forEach(e=>{
-      if(!e.dead&&Math.hypot(b.x-e.x,b.y-e.y)<e.r+b.r){
-        e.hp-=b.dmg;flashEnemy(e);
-        if(e.hp<=0){e.dead=true;score+=10;}
-        b.dead=true;
+    // === 입력 ===
+    document.addEventListener("keydown",e=>{
+      keys[e.key]=true;
+      if(e.key==="1")player.weapon="pistol";
+      if(e.key==="2")player.weapon="shotgun";
+      if(e.key==="3")player.weapon="laser";
+      if(e.key==="Shift"&&player.dashCooldown<=0){
+        player.invincible=40; player.dashTime=20; player.dashCooldown=300;
       }
     });
-    if(boss && Math.hypot(b.x-boss.x,b.y-boss.y)<boss.r+5){ boss.hp-=b.dmg; flashBoss(); b.dead=true; if(boss.hp<=0){score+=100;boss=null;difficulty*=1.3;} }
-  });
-  bullets=bullets.filter(b=>!b.dead);
+    document.addEventListener("keyup",e=>keys[e.key]=false);
+    canvas.addEventListener("click",shoot);
 
-  // 레이저
-  lasers.forEach(l=>{
-    l.t+=dt;
-    if(l.t>0.2)l.dead=true;
-    let ex=l.x+Math.cos(l.a)*1600,ey=l.y+Math.sin(l.a)*1600;
-    enemies.forEach(e=>{
-      if(!e.dead && lineCircle(l.x,l.y,ex,ey,e.x,e.y,e.r)){ e.hp-=2;flashEnemy(e); if(e.hp<=0){e.dead=true;score+=10;} }
-    });
-    if(boss && lineCircle(l.x,l.y,ex,ey,boss.x,boss.y,boss.r)){ boss.hp-=2;flashBoss(); if(boss.hp<=0){score+=100;boss=null;difficulty*=1.3;} }
-  });
-  lasers=lasers.filter(l=>!l.dead);
-
-  enemies=enemies.filter(e=>!e.dead);
-
-  // HUD
-  document.getElementById("score").textContent=score;
-  document.getElementById("weapon").textContent=currentWeapon;
-  document.getElementById("health").textContent=player.hp;
-  document.getElementById("boss").textContent=boss?"Alive":"-";
-  document.getElementById("difficulty").textContent=difficulty.toFixed(2)+"x";
-
-  // 보스 패턴
-  if(boss){
-    boss.cd-=dt;
-    if(boss.hp<80*difficulty && boss.phase===1){boss.phase=2;}
-    if(boss.cd<=0){
-      boss.cd=1;
-      if(boss.phase===2){
-        let tx=Math.random()*canvas.width,ty=Math.random()*canvas.height;
-        boss.x+=(tx-boss.x)*0.3;boss.y+=(ty-boss.y)*0.3;
-        if(Math.hypot(player.x-boss.x,player.y-boss.y)<boss.r+20)damagePlayer(2);
+    // === 발사 ===
+    function shoot(){
+      if(player.weapon==="pistol"){
+        bullets.push({x:player.x,y:player.y,vx:0,vy:-6,dmg:1,type:"pistol"});
+      } else if(player.weapon==="shotgun"){
+        for(let a=-0.3;a<=0.3;a+=0.3){
+          bullets.push({x:player.x,y:player.y,vx:6*Math.sin(a),vy:-6*Math.cos(a),dmg:1,type:"shotgun",life:30});
+        }
+      } else if(player.weapon==="laser"){
+        bullets.push({x:player.x,y:player.y,vx:0,vy:-15,dmg:5,type:"laser"});
       }
     }
-  }
-}
-function damagePlayer(n){
-  if(player.invuln>0)return;
-  if(player.zoey.length>0){player.zoey.pop();return;}
-  player.hp-=n;
-  if(player.hp<=0){gameOver=true;document.getElementById("overlay").style.display="flex";document.getElementById("finalScore").textContent=score;}
-  player.invuln=2;
-  document.getElementById("damageFlash").style.display="block";
-  setTimeout(()=>document.getElementById("damageFlash").style.display="none",200);
-}
-function flashEnemy(e){ctx.save();ctx.globalAlpha=0.5;ctx.fillStyle="white";ctx.beginPath();ctx.arc(e.x,e.y,e.r,0,Math.PI*2);ctx.fill();ctx.restore();}
-function flashBoss(){/*비슷하게 boss 피드백*/}
-function lineCircle(x1,y1,x2,y2,cx,cy,cr){const dx=x2-x1,dy=y2-y1,l2=dx*dx+dy*dy;let t=((cx-x1)*dx+(cy-y1)*dy)/l2;t=Math.max(0,Math.min(1,t));const px=x1+t*dx,py=y1+t*dy;return Math.hypot(px-cx,py-cy)<=cr;}
 
-function draw(){
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  ctx.fillStyle="cyan";
-  ctx.beginPath();
-  ctx.arc(player.x,player.y,20,0,Math.PI*2);
-  ctx.fill();
-  enemies.forEach(e=>{ctx.fillStyle="purple";ctx.beginPath();ctx.arc(e.x,e.y,e.r,0,Math.PI*2);ctx.fill();});
-  if(boss){ctx.fillStyle="red";ctx.beginPath();ctx.arc(boss.x,boss.y,40,0,Math.PI*2);ctx.fill();}
-  bullets.forEach(b=>{ctx.fillStyle="yellow";ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.fill();});
-  lasers.forEach(l=>{ctx.strokeStyle="lime";ctx.beginPath();ctx.moveTo(l.x,l.y);ctx.lineTo(l.x+Math.cos(l.a)*1600,l.y+Math.sin(l.a)*1600);ctx.stroke();});
-  // Zoey 보호막 표시
-  player.zoey.forEach((z,i)=>{
-    let angle=performance.now()/500+i*2*Math.PI/player.zoey.length;
-    ctx.strokeStyle="aqua";
-    ctx.beginPath();
-    ctx.arc(player.x+Math.cos(angle)*30,player.y+Math.sin(angle)*30,10,0,Math.PI*2);
-    ctx.stroke();
-  });
-}
-function loop(t){update(1/60);draw();requestAnimationFrame(loop);}
-requestAnimationFrame(loop);
-function restart(){location.reload();}
-</script>
+    // === 스폰 ===
+    function spawnEnemy(){
+      if(enemies.length>20) return;
+      let r=Math.random();
+      if(r<0.5) enemies.push({x:Math.random()*W,y:-20,r:20,hp:2,type:"enemy"});
+      else if(r<0.75) enemies.push({x:Math.random()*W,y:-20,r:20,hp:2,type:"shooter",cd:100});
+      else if(r<0.9) enemies.push({x:Math.random()*W,y:-20,r:24,hp:3,type:"abby"});
+      else enemies.push({x:-30,y:Math.random()*H,r:22,hp:2,type:"mystery",phase:0,cd:60});
+    }
+    function spawnBoss(){
+      boss={x:W/2,y:60,r:50,hp:160*difficulty,maxHp:160*difficulty,cd:60,phase:1};
+    }
+    function spawnItem(){
+      let r=Math.random();
+      if(r<0.4) items.push({x:Math.random()*W,y:Math.random()*H,r:12,type:"heal"});
+      else if(r<0.7) items.push({x:Math.random()*W,y:Math.random()*H,r:14,type:"zoey"});
+      else items.push({x:Math.random()*W,y:Math.random()*H,r:14,type:"mira"});
+    }
+
+    // === 충돌 ===
+    function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y);}
+    function collide(a,b){return dist(a,b)<a.r+b.r;}
+
+    // === 루프 ===
+    function update(){
+      if(gameOver)return;
+      // 이동
+      if(keys["w"])player.y-=player.speed;
+      if(keys["s"])player.y+=player.speed;
+      if(keys["a"])player.x-=player.speed;
+      if(keys["d"])player.x+=player.speed;
+      player.x=Math.max(player.r,Math.min(W-player.r,player.x));
+      player.y=Math.max(player.r,Math.min(H-player.r,player.y));
+      if(player.invincible>0)player.invincible--;
+      if(player.dashCooldown>0)player.dashCooldown--;
+
+      // 총알
+      bullets.forEach(b=>{b.x+=b.vx;b.y+=b.vy;if(b.type==="shotgun")b.life--;});
+      bullets=bullets.filter(b=>b.x>0&&b.x<W&&b.y>0&&b.y<H&&(b.type!=="shotgun"||b.life>0));
+
+      // 적
+      enemies.forEach(e=>{
+        if(e.type==="enemy"){ let dx=player.x-e.x,dy=player.y-e.y,d=Math.hypot(dx,dy); e.x+=dx/d*1.5*difficulty; e.y+=dy/d*1.5*difficulty; }
+        if(e.type==="shooter"){ if(e.cd--<=0){ e.cd=120; bullets.push({x:e.x,y:e.y,vx:0,vy:4*difficulty,dmg:1,type:"enemy"});} e.y+=0.5*difficulty; }
+        if(e.type==="abby"){ let dx=player.x-e.x,dy=player.y-e.y,d=Math.hypot(dx,dy); e.x+=dx/d*2.5*difficulty; e.y+=dy/d*2.5*difficulty; }
+        if(e.type==="mystery"){ if(e.phase===0){ e.x+=2; if(e.x>W/3){ e.phase=1; e.tx=Math.random()*W; e.ty=Math.random()*H; }} else if(e.phase===1){ let dx=e.tx-e.x,dy=e.ty-e.y,d=Math.hypot(dx,dy); e.x+=dx/d*2; e.y+=dy/d*2; if(dist(e,{x:e.tx,y:e.ty})<5){ e.phase=2; e.cd=60; }} else if(e.phase===2){ e.cd--; if(e.cd<=0){ if(dist(player,e)<200){ if(player.zoeyShields>0)player.zoeyShields--; else {player.hp--;player.invincible=120;if(player.hp<=0)endGame();} } e.dead=true; }} }
+      });
+
+      // 보스
+      if(boss){ boss.cd--; boss.x+=Math.sin(Date.now()/500)*2; if(boss.cd<=0){ boss.cd=40; bullets.push({x:boss.x,y:boss.y,vx:(player.x-boss.x)/30,vy:3,dmg:1,type:"enemy"});} if(boss.hp<boss.maxHp/2&&boss.phase===1){ boss.phase=2; } if(boss.phase===2&&Math.random()<0.02){ bullets.push({x:boss.x,y:boss.y,vx:(player.x-boss.x)/20,vy:(player.y-boss.y)/20,dmg:2,type:"enemy"}); } }
+
+      // 충돌: 총알 vs 적/보스
+      bullets.forEach(b=>{
+        enemies.forEach(e=>{ if(b.type!=="enemy"&&collide(b,e)){ e.hp-=b.dmg; b.life=0; if(e.hp<=0){ score+=10; e.dead=true; } } });
+        if(boss&&b.type!=="enemy"&&collide(b,boss)){ boss.hp-=b.dmg; b.life=0; if(boss.hp<=0){ score+=100; boss=null; difficulty+=0.5; } }
+      });
+      enemies=enemies.filter(e=>!e.dead);
+
+      // 충돌: 적 vs 플레이어
+      enemies.forEach(e=>{ if(collide(e,player)&&player.invincible<=0){ if(player.zoeyShields>0){ player.zoeyShields--; e.dead=true; } else { player.hp--; player.invincible=120; if(player.hp<=0)endGame(); } } });
+
+      // 아이템
+      items.forEach(it=>{ if(collide(it,player)){ if(it.type==="heal")player.hp=Math.min(player.maxHp,player.hp+1); if(it.type==="zoey"&&player.zoeyShields<3)player.zoeyShields++; if(it.type==="mira"){ enemies.forEach(e=>{ if(dist(e,player)<240)e.dead=true; }); if(boss&&dist(boss,player)<240)boss.hp-=20; player.speed+=2; setTimeout(()=>player.speed-=2,1000); } it.dead=true; }});
+      items=items.filter(i=>!i.dead);
+
+      // 스폰
+      if(Math.random()<0.02*difficulty) spawnEnemy();
+      if(Math.random()<0.002*difficulty) spawnItem();
+      if(score>0&&score%500===0&&!boss) spawnBoss();
+
+      // UI
+      document.getElementById("score").innerText="점수: "+score;
+      document.getElementById("weapon").innerText="무기: "+player.weapon;
+      document.getElementById("health").innerText="체력: "+player.hp+" / "+player.maxHp;
+      document.getElementById("bossStatus").innerText="보스: "+(boss?"등장":"-");
+      document.getElementById("difficulty").innerText="난이도: "+difficulty.toFixed(2)+"x";
+      document.getElementById("hpFill").style.width=(player.hp/player.maxHp*100)+"%";
+      document.getElementById("bossFill").style.width=(boss?(boss.hp/boss.maxHp*100):0)+"%";
+      document.getElementById("dashFill").style.width=(100-(player.dashCooldown/300*100))+"%";
+
+      draw();
+      requestAnimationFrame(update);
+    }
+
+    // === 그리기 ===
+    function draw(){
+      ctx.clearRect(0,0,W,H);
+      // 플레이어
+      if(img.player.complete) ctx.drawImage(img.player,player.x-player.r,player.y-player.r,player.r*2,player.r*2);
+      else { ctx.fillStyle="cyan"; ctx.beginPath();ctx.arc(player.x,player.y,player.r,0,Math.PI*2);ctx.fill(); }
+      // Zoey 보호막
+      for(let i=0;i<player.zoeyShields;i++){ ctx.strokeStyle="magenta"; ctx.beginPath(); ctx.arc(player.x,player.y,player.r+8+i*6,0,Math.PI*2); ctx.stroke(); }
+      // 총알
+      bullets.forEach(b=>{ ctx.fillStyle=b.type==="enemy"?"red":(b.type==="laser"?"violet":"yellow"); ctx.beginPath();ctx.arc(b.x,b.y,4,0,Math.PI*2);ctx.fill(); });
+      // 적
+      enemies.forEach(e=>{ let sprite=img[e.type]||img.enemy; if(sprite.complete) ctx.drawImage(sprite,e.x-e.r,e.y-e.r,e.r*2,e.r*2); else { ctx.fillStyle="orange"; ctx.beginPath();ctx.arc(e.x,e.y,e.r,0,Math.PI*2);ctx.fill(); } });
+      // 보스
+      if(boss){ if(img.boss.complete) ctx.drawImage(img.boss,boss.x-boss.r,boss.y-boss.r,boss.r*2,boss.r*2); else { ctx.fillStyle="purple"; ctx.beginPath();ctx.arc(boss.x,boss.y,boss.r,0,Math.PI*2);ctx.fill(); } }
+      // 아이템
+      items.forEach(it=>{ let sprite=img[it.type]; if(sprite&&sprite.complete) ctx.drawImage(sprite,it.x-it.r,it.y-it.r,it.r*2,it.r*2); else { ctx.fillStyle=it.type==="heal"?"green":it.type==="zoey"?"magenta":"blue"; ctx.beginPath();ctx.arc(it.x,it.y,it.r,0,Math.PI*2);ctx.fill(); } });
+    }
+
+    function endGame(){ gameOver=true; document.getElementById("overlay").style.display="flex"; document.getElementById("finalScore").innerText="최종 점수: "+score; }
+    function restartGame(){ location.reload(); }
+
+    update();
+  </script>
 </body>
 </html>
